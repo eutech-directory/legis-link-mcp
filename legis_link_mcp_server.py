@@ -39,7 +39,29 @@ except ImportError:
     sys.exit(1)
 
 # ── Config ─────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# Load API key from environment variable OR local config file
+# This allows the key to be stored locally without going into GitHub
+def _load_api_key() -> str:
+    # 1. Environment variable (Railway, system env)
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if key:
+        return key.strip()
+    # 2. Local .env file next to this script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    for env_file in [
+        os.path.join(script_dir, "legis_link.env"),
+        os.path.join(script_dir, ".env"),
+        os.path.join(os.path.expanduser("~"), ".nanobot", "skills", "legis_link.env"),
+    ]:
+        if os.path.exists(env_file):
+            with open(env_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("ANTHROPIC_API_KEY="):
+                        return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+ANTHROPIC_API_KEY = _load_api_key()
 ANTHROPIC_URL  = "https://api.anthropic.com/v1/messages"
 MODEL          = "claude-haiku-4-5-20251001"
 PORT           = int(os.environ.get("PORT", 8000))
