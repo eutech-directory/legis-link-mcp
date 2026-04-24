@@ -202,7 +202,9 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
                 }
             )
             if resp.status_code != 200:
-                return {"status": "ERROR", "result": f"API error {resp.status_code}",
+                error_body = resp.text[:200]
+                return {"status": "ERROR",
+                        "result": f"API error {resp.status_code}: {error_body}",
                         "code_reference": ""}
 
             data     = resp.json()
@@ -390,6 +392,19 @@ def run_http():
                 await server.run(streams[0], streams[1],
                                  server.create_initialization_options())
 
+        async def handle_test(request):
+            """Test Claude API call directly."""
+            result = await ask_claude(
+                "Return only this JSON: {\"status\": \"ok\", \"result\": \"working\", \"code_reference\": \"test\"}",
+                "test"
+            )
+            return JSONResponse({
+                "claude_response": result,
+                "model": MODEL,
+                "key_prefix": ANTHROPIC_API_KEY[:12] + "..." if len(ANTHROPIC_API_KEY) > 12 else "MISSING",
+                "key_length": len(ANTHROPIC_API_KEY)
+            })
+
         async def handle_server_card(request):
             return JSONResponse(SERVER_CARD)
 
@@ -404,6 +419,7 @@ def run_http():
             })
 
         starlette_app = Starlette(routes=[
+            Route("/test", handle_test),
             Route("/.well-known/mcp/server-card.json", handle_server_card),
             Route("/health", handle_health),
             Mount("/sse", app=sse.handle_post_message),
