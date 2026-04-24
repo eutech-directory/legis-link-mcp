@@ -54,7 +54,7 @@ def _load_api_key() -> str:
         os.path.join(os.path.expanduser("~"), ".nanobot", "skills", "legis_link.env"),
     ]:
         if os.path.exists(env_file):
-            with open(env_file) as f:
+            with open(env_file, encoding="utf-8-sig") as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith("ANTHROPIC_API_KEY="):
