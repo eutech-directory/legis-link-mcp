@@ -394,10 +394,13 @@ def run_http():
             return JSONResponse(SERVER_CARD)
 
         async def handle_health(request):
+            key = ANTHROPIC_API_KEY
             return JSONResponse({
                 "status": "ok", "service": "legis-link-mcp",
                 "version": "3.0.0", "engine": "claude-direct",
-                "tools": {"free": 3, "pro": 5, "total": 8}
+                "tools": {"free": 3, "pro": 5, "total": 8},
+                "api_key_set": bool(key),
+                "api_key_prefix": key[:12] + "..." if len(key) > 12 else "MISSING"
             })
 
         starlette_app = Starlette(routes=[
