@@ -1,3 +1,4 @@
+﻿# legis-link-mcp v3.0.0
 mcp>=1.0.0
 httpx>=0.24.0
 uvicorn>=0.24.0
