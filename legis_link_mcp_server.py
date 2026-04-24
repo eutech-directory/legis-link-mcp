@@ -41,7 +41,7 @@ except ImportError:
 # ── Config ─────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_URL  = "https://api.anthropic.com/v1/messages"
-MODEL          = "claude-sonnet-4-20250514"
+MODEL          = "claude-haiku-4-5-20251001"
 PORT           = int(os.environ.get("PORT", 8000))
 PRO_UPGRADE    = "https://legis-link-mcp-production-3e9b.up.railway.app/app?upgrade=pro"
 
