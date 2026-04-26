@@ -1,0 +1,9 @@
+﻿{
+  "name": "Legis-Link MCP",
+  "description": "Construction trade compliance MCP server. Cable sizing, RAMS, safety checklists for electrical, plumbing, HVAC across AU, UK, US, CA, EU.",
+  "version": "3.1.1",
+  "author": "eutech-directory",
+  "license": "MIT",
+  "homepage": "https://legis-link-mcp-production-3e9b.up.railway.app",
+  "repository": "https://github.com/eutech-directory/legis-link-mcp"
+}
