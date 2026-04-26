@@ -1,70 +1,47 @@
-# Legis-Link MCP Server
+﻿# Legis-Link MCP
 
-Construction trade compliance AI for Claude, Cursor, and any MCP-compatible client.
-
-## What it does
-
-Answers trade compliance questions with exact code references across 10 trades and 20+ regions.
-
-**Trades:** Electrical · Plumbing · HVAC · Welding · Carpentry · Fire protection · Concrete · Roofing · Gas fitting · Solar/Battery
-
-**Regions:** Australia (NSW, VIC, QLD, WA, SA, ACT) · USA (TX, CA, FL, NY, IL) · Canada (ON, BC, AB, QC) · UK (England, Scotland, Wales, NI) · EU (Germany, France, Netherlands, Ireland, Spain, Italy)
+Construction trade compliance MCP server. Covers electrical, plumbing, HVAC, welding, roofing, gas fitting, solar and more across Australia, UK, USA, Canada and EU.
 
 ## Tools
 
-### `check_compliance`
-Answer any trade compliance question with code-cited response.
-```json
-{
-  "trade": "Electrical",
-  "region": "NSW",
-  "question": "minimum wire gauge for 20A circuit",
-  "role": "Journeyman"
-}
-```
-Returns: answer + exact code reference (e.g. AS/NZS 3008.1.2)
+### Free (no signup needed)
+- check_compliance - Compliance questions with exact code references
+- get_code_reference - Look up specific standards and sections
+- list_supported_regions - See coverage for a trade
 
-### `get_code_reference`
-Look up specific code sections and standards.
-```json
-{
-  "trade": "Electrical",
-  "region": "NSW", 
-  "topic": "wire sizing"
-}
-```
+### Pro (/year)
+- calculate_technical_spec - Cable sizing, pipe sizing, voltage drop
+- generate_safety_checklist - PPE and hazard controls with reg citations
+- generate_rams - Full Risk Assessment and Method Statement
+- erify_material_compliance - COMPLIANT/NON_COMPLIANT before ordering
+- get_inspection_requirements - Who inspects, what docs, which regulation
 
-### `list_supported_regions`
-List all supported regions for a given trade.
-```json
-{
-  "trade": "Plumbing"
-}
-```
+## Installation
 
-## Install
+Add to Claude Desktop config:
 
-### Claude Desktop
-Add to `~/.claude/claude_desktop_config.json`:
-```json
+`json
 {
   "mcpServers": {
     "legis-link": {
       "command": "python",
-      "args": ["/path/to/legis_link_mcp_server.py"]
+      "args": ["legis_link_mcp_server.py"]
     }
   }
 }
-```
+`
 
-### Requirements
-```bash
-pip install mcp httpx
-```
+Or install via Smithery:
+https://smithery.ai/server/ricky-farmerai/construction-legis-link-mcp
 
-## Live demo
-[legis-link-mcp-production.up.railway.app/app](https://legis-link-mcp-production.up.railway.app/app)
+## Coverage
 
-## Free + Pro
-- Free tier: unlimited compliance questions
-- Pro ($199/year): audit logs, compliance certificates, team dashboard
+- Australia: AS/NZS 3000, AS/NZS 3008, NCC, state WHS Acts
+- UK: BS 7671, CDM 2015, HSE guidance, Gas Safe
+- USA: NEC NFPA 70, IBC, OSHA 29 CFR 1926
+- Canada: CEC CSA C22.1, NBC
+- EU: EN standards, local regulations
+
+## License
+
+MIT
