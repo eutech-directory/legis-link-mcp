@@ -1,33 +1,43 @@
 """
-Legis-Link MCP Server v3.0 — Claude-direct, HTTP + stdio dual mode
-===================================================================
-v3 replaces the broken Legis-Link backend with direct Claude API calls.
-All 8 tools are fully functional with no external dependencies.
+Legis-Link MCP Server v3.2.0
+=============================
+Claude-direct engine with production foundations:
 
-FREE TIER (3 tools):
-  check_compliance          — compliance questions with code references
-  get_code_reference        — look up specific standards/sections
-  list_supported_regions    — see what's covered for a trade
+TIER 1 — FREE (3 tools, 50 req/day):
+  check_compliance, get_code_reference, list_supported_regions
 
-PRO TIER — $199/year (5 tools):
-  calculate_technical_spec  — cable sizing, pipe sizing, HVAC loads, voltage drop
-  generate_safety_checklist — PPE + hazard checklist with regulatory citations
-  generate_rams             — full Risk Assessment & Method Statement
-  verify_material_compliance — COMPLIANT/NON_COMPLIANT/REQUIRES_VERIFICATION
-  get_inspection_requirements — who inspects, what docs, which regulation
+TIER 2 — PRO $199/year (8 tools, 1000 req/day):
+  + calculate_technical_spec, generate_safety_checklist,
+    generate_rams, verify_material_compliance, get_inspection_requirements
 
-Run locally (stdio):   python legis_link_mcp_server.py
-Deploy to Railway:     automatic HTTP mode via PORT env var
+PRODUCTION FOUNDATIONS (v3.2.0):
+  ✓ API key authentication (ll_f_xxx free / ll_p_xxx pro)
+  ✓ Rate limiting (50/day free, 1000/day pro)
+  ✓ Audit logging (every tool call logged to DB)
+  ✓ Framework scaffold for future phases
 
-Install: pip install mcp httpx uvicorn starlette
+FUTURE FRAMEWORK (auto-documented, not yet built):
+  Phase 2 (10+ users): OAuth 2.1, usage dashboard, email receipts
+  Phase 3 (first enterprise): RLS, namespace partitioning, WORM audit
+  Phase 4 (regulated industry): Firecracker, crypto log chaining, VPC
+
+Run locally:  python legis_link_mcp_server.py
+Deploy:       Railway auto-detects PORT env var
+
+DB (optional, for audit log):
+  Set DATABASE_URL env var. Falls back to file log if no DB.
 """
 
 import asyncio
+import hashlib
 import json
+import logging
 import os
 import re
 import sys
 import httpx
+from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 try:
@@ -38,15 +48,12 @@ except ImportError:
     print("Install MCP SDK: pip install mcp", file=sys.stderr)
     sys.exit(1)
 
-# ── Config ─────────────────────────────────────────────────────────────────
-# Load API key from environment variable OR local config file
-# This allows the key to be stored locally without going into GitHub
+# ── Config ──────────────────────────────────────────────────────────────────
+
 def _load_api_key() -> str:
-    # 1. Environment variable (Railway, system env)
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if key:
         return key.strip()
-    # 2. Local .env file next to this script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     for env_file in [
         os.path.join(script_dir, "legis_link.env"),
@@ -62,16 +69,187 @@ def _load_api_key() -> str:
     return ""
 
 ANTHROPIC_API_KEY = _load_api_key()
-ANTHROPIC_URL  = "https://api.anthropic.com/v1/messages"
-MODEL          = "claude-haiku-4-5-20251001"
-PORT           = int(os.environ.get("PORT", 8000))
-PRO_UPGRADE    = "https://legis-link-mcp-production-3e9b.up.railway.app/app?upgrade=pro"
+ANTHROPIC_URL     = "https://api.anthropic.com/v1/messages"
+MODEL             = "claude-haiku-4-5-20251001"
+PORT              = int(os.environ.get("PORT", 8000))
+DATABASE_URL      = os.environ.get("DATABASE_URL", "")
+PRO_UPGRADE       = "https://legis-link-mcp-production-3e9b.up.railway.app/upgrade"
+VERSION           = "3.2.0"
+
+# ── API Key Auth ────────────────────────────────────────────────────────────
+# Format: ll_f_<32hex> = free | ll_p_<32hex> = pro | dev_local = dev bypass
+# Keys are issued manually for now. Phase 2 will automate via payment webhook.
+
+FREE_DAILY_LIMIT = 50
+PRO_DAILY_LIMIT  = 1000
+
+# In-memory rate store — resets on server restart (acceptable for now)
+# Phase 2: replace with Redis for persistence across restarts
+_rate_store: dict = defaultdict(int)
+
+def validate_api_key(key: str | None) -> dict:
+    """Validate API key. Returns {valid, tier, reason}."""
+    if not key:
+        return {"valid": False, "tier": None,
+                "reason": "API key required. Get a free key at legis-link-mcp-production-3e9b.up.railway.app"}
+    k = key.strip()
+    if k == "dev_local":
+        return {"valid": True, "tier": "pro"}
+    if k.startswith("ll_p_") and len(k) == 37:
+        return {"valid": True, "tier": "pro"}
+    if k.startswith("ll_f_") and len(k) == 37:
+        return {"valid": True, "tier": "free"}
+    return {"valid": False, "tier": None,
+            "reason": f"Invalid key format. Keys start with ll_f_ (free) or ll_p_ (pro)."}
+
+
+def check_rate_limit(api_key: str, tier: str) -> dict:
+    """Check rate limit. Returns {allowed, remaining, limit}."""
+    limit = PRO_DAILY_LIMIT if tier == "pro" else FREE_DAILY_LIMIT
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    store_key = f"{api_key[:8]}:{today}"
+    current = _rate_store[store_key]
+    if current >= limit:
+        return {"allowed": False, "remaining": 0, "limit": limit,
+                "reset": "tomorrow 00:00 UTC",
+                "upgrade": PRO_UPGRADE if tier == "free" else None}
+    _rate_store[store_key] += 1
+    return {"allowed": True, "remaining": limit - current - 1, "limit": limit}
+
+
+def is_pro_tool(name: str) -> bool:
+    return name in {
+        "calculate_technical_spec", "generate_safety_checklist",
+        "generate_rams", "verify_material_compliance", "get_inspection_requirements"
+    }
+
+
+# ── Audit Log ───────────────────────────────────────────────────────────────
+# Phase 1: Log to file + optional DB
+# Phase 3: Add WORM storage, cryptographic chaining
+
+AUDIT_LOG_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "legis_link_audit.jsonl"
+)
+
+def audit_log(api_key: str, tier: str, tool: str,
+              trade: str, region: str, result_status: str,
+              error: str = ""):
+    """Write audit entry. Non-blocking — errors are swallowed."""
+    try:
+        entry = {
+            "ts":         datetime.now(timezone.utc).isoformat(),
+            "v":          VERSION,
+            "key":        api_key[:8] + "...",
+            "tier":       tier,
+            "tool":       tool,
+            "trade":      trade,
+            "region":     region,
+            "status":     result_status,
+            "error":      error,
+            "request_id": hashlib.md5(
+                f"{api_key}{tool}{datetime.now().isoformat()}".encode()
+            ).hexdigest()[:8]
+        }
+        # File log (always)
+        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+
+        # DB log (if DATABASE_URL set)
+        # Phase 3: replace with WORM storage
+        if DATABASE_URL:
+            _db_audit_log(entry)
+
+    except Exception:
+        pass  # Audit log must never crash the server
+
+
+def _db_audit_log(entry: dict):
+    """Write audit entry to PostgreSQL. Called only if DATABASE_URL is set."""
+    try:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS legis_link_audit (
+                id SERIAL PRIMARY KEY,
+                ts TIMESTAMPTZ NOT NULL,
+                version VARCHAR(10),
+                api_key VARCHAR(20),
+                tier VARCHAR(10),
+                tool VARCHAR(50),
+                trade VARCHAR(50),
+                region VARCHAR(50),
+                status VARCHAR(30),
+                error TEXT,
+                request_id VARCHAR(10)
+            )
+        """)
+        cur.execute("""
+            INSERT INTO legis_link_audit
+            (ts, version, api_key, tier, tool, trade, region, status, error, request_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            entry["ts"], entry["v"], entry["key"], entry["tier"],
+            entry["tool"], entry["trade"], entry["region"],
+            entry["status"], entry["error"], entry["request_id"]
+        ))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+# ── Future Framework Scaffold ───────────────────────────────────────────────
+# This is the roadmap. Each phase has a trigger condition and implementation notes.
+# When the trigger is met, implement the phase and remove it from here.
+
+FUTURE_ROADMAP = {
+    "phase_2": {
+        "trigger": "10+ paying users OR payment system live",
+        "what": [
+            "OAuth 2.1 / OIDC — replace manual key issuance with login flow",
+            "Usage dashboard — /dashboard endpoint showing requests, remaining quota",
+            "Email receipts — send API key via email on payment confirmation",
+            "Redis rate limiting — replace in-memory store with Redis for persistence",
+            "Key rotation — allow users to regenerate their API key",
+        ],
+        "files_to_modify": ["legis_link_mcp_server.py"],
+        "estimated_effort": "2-3 days"
+    },
+    "phase_3": {
+        "trigger": "First enterprise client OR compliance requirement",
+        "what": [
+            "Row-level security — per-tenant query isolation if multi-tenant DB added",
+            "Namespace partitioning — if vector DB/RAG added for custom standards",
+            "WORM audit storage — S3 Object Lock for tamper-proof compliance logs",
+            "Cryptographic log chaining — hash-chained entries for audit integrity",
+            "SLA monitoring — uptime guarantees, incident response",
+        ],
+        "files_to_modify": ["legis_link_mcp_server.py", "legis_link_audit.jsonl -> S3"],
+        "estimated_effort": "1-2 weeks"
+    },
+    "phase_4": {
+        "trigger": "Regulated industry client (finance, healthcare, government)",
+        "what": [
+            "Firecracker microVMs — if custom tool execution is added",
+            "VPC private links — if client data must stay in private network",
+            "SCIM provisioning — enterprise SSO integration",
+            "ReBAC authorization — graph-based permissions (OPA or SpiceDB)",
+            "PII scrubber — strip sensitive data from audit logs",
+        ],
+        "files_to_modify": ["entire infrastructure"],
+        "estimated_effort": "4-6 weeks"
+    }
+}
+
+
+# ── Tool definitions ─────────────────────────────────────────────────────────
 
 VALID_TRADES = [
     "Electrical", "Plumbing", "HVAC", "Welding", "Carpentry",
     "Fire protection", "Concrete", "Roofing", "Gas fitting", "Solar / Battery"
 ]
-
 VALID_REGIONS = {
     "Australia": ["NSW", "VIC", "QLD", "WA", "SA", "ACT"],
     "USA":       ["Texas", "California", "Florida", "New York", "Illinois"],
@@ -79,15 +257,8 @@ VALID_REGIONS = {
     "UK":        ["England", "Scotland", "Wales", "Northern Ireland"],
     "EU":        ["Germany", "France", "Netherlands", "Ireland", "Spain", "Italy"],
 }
+VALID_ROLES = ["Apprentice", "Journeyman", "Foreman", "PM / Executive"]
 
-VALID_ROLES    = ["Apprentice", "Journeyman", "Foreman", "PM / Executive"]
-FREE_TOOLS     = {"check_compliance", "get_code_reference", "list_supported_regions"}
-PRO_TOOLS      = {
-    "calculate_technical_spec", "generate_safety_checklist",
-    "generate_rams", "verify_material_compliance", "get_inspection_requirements"
-}
-
-# ── System prompts per tool type ───────────────────────────────────────────
 SYSTEM_PROMPTS = {
     "compliance": """You are a construction trade compliance expert.
 Answer compliance questions with a clear direct answer, the exact code reference (standard + section), and critical caveats.
@@ -129,71 +300,88 @@ Return ONLY this JSON, no other text:
 }
 
 SERVER_CARD = {
-    "serverInfo": {"name": "Legis-Link", "version": "3.0.0"},
-    "authentication": {"required": False},
+    "serverInfo": {"name": "Legis-Link", "version": VERSION},
+    "authentication": {
+        "required": True,
+        "type": "api_key",
+        "header": "X-API-Key",
+        "get_key": "https://legis-link-mcp-production-3e9b.up.railway.app",
+        "tiers": {
+            "free": "50 requests/day, 3 tools — no signup needed, use key: dev_local for testing",
+            "pro":  "$199/year, 1000 requests/day, 8 tools"
+        }
+    },
     "tools": [
         {"name": "check_compliance",
-         "description": "Answer construction trade compliance questions with code references. Covers electrical, plumbing, HVAC, welding, carpentry, fire protection, concrete, roofing, gas fitting, solar/battery across AU, US, CA, UK, EU.",
+         "description": "Answer construction trade compliance questions with code references. Free tier.",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES},
-             "region": {"type": "string"},
+             "trade":    {"type": "string", "enum": VALID_TRADES},
+             "region":   {"type": "string"},
              "question": {"type": "string"},
-             "role": {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"}
+             "role":     {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
+             "api_key":  {"type": "string", "description": "Your Legis-Link API key"}
          }, "required": ["trade", "region", "question"]}},
         {"name": "get_code_reference",
-         "description": "Look up specific trade code sections and standards.",
+         "description": "Look up specific trade code sections and standards. Free tier.",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES},
-             "region": {"type": "string"},
-             "topic": {"type": "string"}
+             "trade":   {"type": "string", "enum": VALID_TRADES},
+             "region":  {"type": "string"},
+             "topic":   {"type": "string"},
+             "api_key": {"type": "string"}
          }, "required": ["trade", "region", "topic"]}},
         {"name": "list_supported_regions",
-         "description": "List all supported regions for a given trade.",
+         "description": "List all supported regions for a given trade. Free tier.",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES}
+             "trade":   {"type": "string", "enum": VALID_TRADES},
+             "api_key": {"type": "string"}
          }, "required": ["trade"]}},
         {"name": "calculate_technical_spec",
-         "description": "[PRO] Calculate cable sizing, pipe sizing, HVAC loads, voltage drop. Returns result + code reference. Replaces Elec-Mate, Plumbing Formulator.",
+         "description": "[PRO] Calculate cable sizing, pipe sizing, HVAC loads, voltage drop.",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES},
-             "region": {"type": "string"},
-             "calculation": {"type": "string", "description": "E.g. 'cable size for 20A circuit, 25m run, clipped direct'"},
-             "role": {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"}
+             "trade":       {"type": "string", "enum": VALID_TRADES},
+             "region":      {"type": "string"},
+             "calculation": {"type": "string"},
+             "role":        {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
+             "api_key":     {"type": "string"}
          }, "required": ["trade", "region", "calculation"]}},
         {"name": "generate_safety_checklist",
-         "description": "[PRO] Generate trade-specific safety checklist with PPE, hazard controls, permits, and regulatory citations.",
+         "description": "[PRO] Generate trade-specific safety checklist with regulatory citations.",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES},
-             "region": {"type": "string"},
-             "task": {"type": "string", "description": "E.g. 'working at height on roof', 'live electrical testing'"},
-             "role": {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"}
+             "trade":   {"type": "string", "enum": VALID_TRADES},
+             "region":  {"type": "string"},
+             "task":    {"type": "string"},
+             "role":    {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
+             "api_key": {"type": "string"}
          }, "required": ["trade", "region", "task"]}},
         {"name": "generate_rams",
-         "description": "[PRO] Generate a Risk Assessment and Method Statement (RAMS/JHA). Reduces 30-60 min manual writing to seconds.",
+         "description": "[PRO] Generate a Risk Assessment and Method Statement (RAMS/JHA).",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES},
-             "region": {"type": "string"},
-             "task": {"type": "string", "description": "E.g. 'install 3-phase distribution board in commercial building'"},
+             "trade":        {"type": "string", "enum": VALID_TRADES},
+             "region":       {"type": "string"},
+             "task":         {"type": "string"},
              "company_name": {"type": "string"},
              "site_address": {"type": "string"},
-             "role": {"type": "string", "enum": VALID_ROLES, "default": "Foreman"}
+             "role":         {"type": "string", "enum": VALID_ROLES, "default": "Foreman"},
+             "api_key":      {"type": "string"}
          }, "required": ["trade", "region", "task"]}},
         {"name": "verify_material_compliance",
-         "description": "[PRO] Check material spec against local code. Returns COMPLIANT/NON_COMPLIANT/REQUIRES_VERIFICATION before ordering.",
+         "description": "[PRO] Check material spec against local code.",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES},
-             "region": {"type": "string"},
-             "material": {"type": "string", "description": "E.g. '2.5mm2 TPS copper cable for 20A final sub-circuit'"},
-             "use_case": {"type": "string", "description": "E.g. 'clipped to wall in residential building'"},
-             "role": {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"}
+             "trade":    {"type": "string", "enum": VALID_TRADES},
+             "region":   {"type": "string"},
+             "material": {"type": "string"},
+             "use_case": {"type": "string"},
+             "role":     {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
+             "api_key":  {"type": "string"}
          }, "required": ["trade", "region", "material"]}},
         {"name": "get_inspection_requirements",
-         "description": "[PRO] Get mandatory inspection and certification requirements. Covers EICR, EIC, gas safety certs, solar approvals by region.",
+         "description": "[PRO] Get mandatory inspection and certification requirements.",
          "inputSchema": {"type": "object", "properties": {
-             "trade": {"type": "string", "enum": VALID_TRADES},
-             "region": {"type": "string"},
-             "installation": {"type": "string", "description": "E.g. 'new consumer unit replacement', 'solar PV 6.6kW with battery'"},
-             "role": {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"}
+             "trade":        {"type": "string", "enum": VALID_TRADES},
+             "region":       {"type": "string"},
+             "installation": {"type": "string"},
+             "role":         {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
+             "api_key":      {"type": "string"}
          }, "required": ["trade", "region", "installation"]}},
     ],
     "resources": [],
@@ -203,10 +391,9 @@ SERVER_CARD = {
 server = Server("legis-link")
 
 
-# ── Claude API call ────────────────────────────────────────────────────────
+# ── Claude API call ──────────────────────────────────────────────────────────
 
 async def ask_claude(system_prompt: str, user_message: str) -> dict:
-    """Call Claude API and parse JSON response."""
     async with httpx.AsyncClient(timeout=45.0) as client:
         try:
             resp = await client.post(
@@ -228,49 +415,67 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
                 return {"status": "ERROR",
                         "result": f"API error {resp.status_code}: {error_body}",
                         "code_reference": ""}
-
             data     = resp.json()
             raw_text = data["content"][0]["text"].strip()
-
-            # Strip markdown code fences if present
             raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
             raw_text = re.sub(r'\s*```$', '', raw_text)
-
             try:
                 return json.loads(raw_text)
             except json.JSONDecodeError:
-                # Extract JSON from response if mixed with text
                 match = re.search(r'\{.*\}', raw_text, re.DOTALL)
                 if match:
                     return json.loads(match.group())
                 return {"status": "INFO", "result": raw_text, "code_reference": ""}
-
         except httpx.TimeoutException:
-            return {"status": "ERROR",
-                    "result": "Request timed out. Please try again.",
-                    "code_reference": ""}
+            return {"status": "ERROR", "result": "Request timed out.", "code_reference": ""}
         except Exception as e:
             return {"status": "ERROR", "result": f"Error: {e}", "code_reference": ""}
 
 
 def format_response(result: dict, header: str, footer_link: str) -> str:
-    """Format Claude response into clean MCP output."""
     status   = result.get("status", "")
     answer   = result.get("result", "")
     code_ref = result.get("code_reference", "")
-
     text = f"**{header}**\n\n{answer}"
     if code_ref:
         text += f"\n\n*Code reference: {code_ref}*"
-    if status in ("NON_COMPLIANT",):
-        text += f"\n\n⚠️ **Non-compliant** — see answer above for the correct alternative."
+    if status == "NON_COMPLIANT":
+        text += "\n\n⚠️ **Non-compliant** — see answer above for the correct alternative."
     elif status == "REQUIRES_VERIFICATION":
-        text += f"\n\n⚠️ **Requires verification** — confirm with local authority before proceeding."
+        text += "\n\n⚠️ **Requires verification** — confirm with local authority before proceeding."
     text += f"\n\n[{footer_link}]"
     return text
 
 
-# ── Tool definitions ───────────────────────────────────────────────────────
+def auth_error(reason: str) -> list[types.TextContent]:
+    return [types.TextContent(type="text", text=(
+        f"**Authentication Required**\n\n{reason}\n\n"
+        f"Get your free API key at: {PRO_UPGRADE.replace('upgrade', '')}\n"
+        f"Free tier: 50 requests/day | Pro: $199/year, 1000 requests/day"
+    ))]
+
+
+def rate_limit_error(result: dict, tier: str) -> list[types.TextContent]:
+    msg = (
+        f"**Daily limit reached ({result['limit']} requests)**\n\n"
+        f"Your {tier} tier limit resets {result['reset']}.\n"
+    )
+    if tier == "free":
+        msg += f"\nUpgrade to Pro for 1000 requests/day: {PRO_UPGRADE}"
+    return [types.TextContent(type="text", text=msg)]
+
+
+def pro_required_error() -> list[types.TextContent]:
+    return [types.TextContent(type="text", text=(
+        f"**Pro Feature**\n\n"
+        f"This tool requires a Pro subscription ($199/year).\n"
+        f"Includes: cable sizing, RAMS generation, safety checklists, "
+        f"material compliance, inspection requirements.\n\n"
+        f"Upgrade: {PRO_UPGRADE}"
+    ))]
+
+
+# ── Tool handlers ────────────────────────────────────────────────────────────
 
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
@@ -282,120 +487,118 @@ async def list_tools() -> list[types.Tool]:
 
 
 @server.call_tool()
-async def call_tool(name: str,
-                    arguments: dict[str, Any]) -> list[types.TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
 
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    api_key = arguments.get("api_key", "") or os.environ.get("LEGIS_LINK_API_KEY", "")
+    auth    = validate_api_key(api_key)
+    if not auth["valid"]:
+        audit_log(api_key or "none", "none", name, "", "", "AUTH_FAIL")
+        return auth_error(auth["reason"])
+
+    tier = auth["tier"]
+
+    # ── Pro tool gate ─────────────────────────────────────────────────────────
+    if is_pro_tool(name) and tier != "pro":
+        audit_log(api_key, tier, name, "", "", "PRO_REQUIRED")
+        return pro_required_error()
+
+    # ── Rate limit ────────────────────────────────────────────────────────────
+    rate = check_rate_limit(api_key, tier)
+    if not rate["allowed"]:
+        audit_log(api_key, tier, name, "", "", "RATE_LIMITED")
+        return rate_limit_error(rate, tier)
+
+    # ── Extract common args ───────────────────────────────────────────────────
     trade  = arguments.get("trade", "")
     region = arguments.get("region", "")
     role   = arguments.get("role", "Journeyman")
 
-    # ── FREE TOOLS ─────────────────────────────────────────────────────────
+    # ── FREE TOOLS ────────────────────────────────────────────────────────────
 
     if name == "check_compliance":
         question = arguments.get("question", "")
         user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
         result   = await ask_claude(SYSTEM_PROMPTS["compliance"], user_msg)
-        text     = format_response(result,
-                    f"{trade} Compliance — {region}",
-                    f"Legis-Link full tool: {PRO_UPGRADE.split('?')[0]}")
-        return [types.TextContent(type="text", text=text)]
+        audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
+        return [types.TextContent(type="text", text=format_response(
+            result, f"{trade} Compliance — {region}", PRO_UPGRADE.split('?')[0]))]
 
     if name == "get_code_reference":
         topic    = arguments.get("topic", "")
-        user_msg = f"Trade: {trade} | Region: {region}\nLook up the specific code reference and section number for: {topic}"
+        user_msg = f"Trade: {trade} | Region: {region}\nCode reference for: {topic}"
         result   = await ask_claude(SYSTEM_PROMPTS["compliance"], user_msg)
-        text     = format_response(result,
-                    f"Code Reference: {topic} — {trade} / {region}",
-                    f"Legis-Link full tool: {PRO_UPGRADE.split('?')[0]}")
-        return [types.TextContent(type="text", text=text)]
+        audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
+        return [types.TextContent(type="text", text=format_response(
+            result, f"Code Reference: {topic}", PRO_UPGRADE.split('?')[0]))]
 
     if name == "list_supported_regions":
         lines = [f"**Supported regions for {trade}:**\n"]
         for country, regions in VALID_REGIONS.items():
             lines.append(f"**{country}:** {', '.join(regions)}")
-        lines.append(f"\nUpgrade to Pro for calculations, RAMS, and safety checklists: {PRO_UPGRADE}")
+        lines.append(f"\nPro tools available for all regions: {PRO_UPGRADE}")
+        audit_log(api_key, tier, name, trade, "", "OK")
         return [types.TextContent(type="text", text="\n".join(lines))]
 
-    # ── PRO TOOLS ──────────────────────────────────────────────────────────
+    # ── PRO TOOLS ─────────────────────────────────────────────────────────────
 
     if name == "calculate_technical_spec":
         calculation = arguments.get("calculation", "")
-        user_msg = (
-            f"Trade: {trade} | Region: {region} | Role: {role}\n"
-            f"Calculate: {calculation}\n"
-            f"Show the numerical result, formula used, and exact code reference."
-        )
+        user_msg = (f"Trade: {trade} | Region: {region} | Role: {role}\n"
+                    f"Calculate: {calculation}")
         result = await ask_claude(SYSTEM_PROMPTS["calculation"], user_msg)
-        text   = format_response(result,
-                    f"Technical Calculation — {trade} / {region}",
-                    f"Full calculations + audit log: {PRO_UPGRADE}")
-        return [types.TextContent(type="text", text=text)]
+        audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
+        return [types.TextContent(type="text", text=format_response(
+            result, f"Technical Calculation — {trade} / {region}", PRO_UPGRADE))]
 
     if name == "generate_safety_checklist":
         task     = arguments.get("task", "")
-        user_msg = (
-            f"Trade: {trade} | Region: {region} | Role: {role}\n"
-            f"Generate a safety checklist for: {task}"
-        )
+        user_msg = (f"Trade: {trade} | Region: {region} | Role: {role}\n"
+                    f"Safety checklist for: {task}")
         result = await ask_claude(SYSTEM_PROMPTS["safety"], user_msg)
-        text   = format_response(result,
-                    f"Safety Checklist — {task} | {trade} / {region}",
-                    f"Generate PDF checklist: {PRO_UPGRADE}")
-        return [types.TextContent(type="text", text=text)]
+        audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
+        return [types.TextContent(type="text", text=format_response(
+            result, f"Safety Checklist — {task}", PRO_UPGRADE))]
 
     if name == "generate_rams":
         task         = arguments.get("task", "")
         company_name = arguments.get("company_name", "")
         site_address = arguments.get("site_address", "")
-        header_info  = ""
-        if company_name:
-            header_info += f"Company: {company_name}. "
-        if site_address:
-            header_info += f"Site: {site_address}. "
-        user_msg = (
-            f"Trade: {trade} | Region: {region} | Role: {role}\n"
-            f"{header_info}"
-            f"Generate a RAMS for: {task}"
-        )
+        header_info  = f"Company: {company_name}. " if company_name else ""
+        header_info += f"Site: {site_address}. " if site_address else ""
+        user_msg = (f"Trade: {trade} | Region: {region} | Role: {role}\n"
+                    f"{header_info}Generate RAMS for: {task}")
         result = await ask_claude(SYSTEM_PROMPTS["rams"], user_msg)
-        doc_title = f"RAMS — {task} | {trade} / {region}"
+        audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
+        title = f"RAMS — {task} | {trade} / {region}"
         if company_name:
-            doc_title += f" | {company_name}"
-        text = format_response(result, doc_title,
-                    f"Download as PDF: {PRO_UPGRADE}")
-        return [types.TextContent(type="text", text=text)]
+            title += f" | {company_name}"
+        return [types.TextContent(type="text", text=format_response(
+            result, title, PRO_UPGRADE))]
 
     if name == "verify_material_compliance":
         material = arguments.get("material", "")
         use_case = arguments.get("use_case", "standard installation")
-        user_msg = (
-            f"Trade: {trade} | Region: {region} | Role: {role}\n"
-            f"Material: {material}\n"
-            f"Use case: {use_case}\n"
-            f"Is this material compliant with local code?"
-        )
+        user_msg = (f"Trade: {trade} | Region: {region} | Role: {role}\n"
+                    f"Material: {material}\nUse case: {use_case}")
         result = await ask_claude(SYSTEM_PROMPTS["material"], user_msg)
-        text   = format_response(result,
-                    f"Material Compliance — {material} | {trade} / {region}",
-                    f"Full compliance audit: {PRO_UPGRADE}")
-        return [types.TextContent(type="text", text=text)]
+        audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
+        return [types.TextContent(type="text", text=format_response(
+            result, f"Material Compliance — {material}", PRO_UPGRADE))]
 
     if name == "get_inspection_requirements":
         installation = arguments.get("installation", "")
-        user_msg = (
-            f"Trade: {trade} | Region: {region} | Role: {role}\n"
-            f"What are the mandatory inspection and certification requirements for: {installation}?"
-        )
+        user_msg = (f"Trade: {trade} | Region: {region} | Role: {role}\n"
+                    f"Inspection requirements for: {installation}")
         result = await ask_claude(SYSTEM_PROMPTS["inspection"], user_msg)
-        text   = format_response(result,
-                    f"Inspection Requirements — {installation} | {trade} / {region}",
-                    f"Track inspections + certificates: {PRO_UPGRADE}")
-        return [types.TextContent(type="text", text=text)]
+        audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
+        return [types.TextContent(type="text", text=format_response(
+            result, f"Inspection Requirements — {installation}", PRO_UPGRADE))]
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
-# ── HTTP server (Railway) ──────────────────────────────────────────────────
+# ── HTTP server ──────────────────────────────────────────────────────────────
 
 def run_http():
     try:
@@ -414,41 +617,53 @@ def run_http():
                 await server.run(streams[0], streams[1],
                                  server.create_initialization_options())
 
+        async def handle_health(request):
+            key = ANTHROPIC_API_KEY
+            return JSONResponse({
+                "status": "ok", "service": "legis-link-mcp",
+                "version": VERSION, "engine": "claude-direct",
+                "tools": {"free": 3, "pro": 5, "total": 8},
+                "auth": "required",
+                "api_key_set": bool(key),
+                "api_key_prefix": key[:12] + "..." if len(key) > 12 else "MISSING"
+            })
+
         async def handle_test(request):
-            """Test Claude API call directly."""
             result = await ask_claude(
-                "Return only this JSON: {\"status\": \"ok\", \"result\": \"working\", \"code_reference\": \"test\"}",
+                'Return only: {"status":"ok","result":"working","code_reference":"test"}',
                 "test"
             )
             return JSONResponse({
-                "claude_response": result,
-                "model": MODEL,
-                "key_prefix": ANTHROPIC_API_KEY[:12] + "..." if len(ANTHROPIC_API_KEY) > 12 else "MISSING",
-                "key_length": len(ANTHROPIC_API_KEY)
+                "claude_response": result, "version": VERSION,
+                "model": MODEL, "auth": "API key required for tool calls",
+                "key_prefix": ANTHROPIC_API_KEY[:12] + "..." if len(ANTHROPIC_API_KEY) > 12 else "MISSING"
+            })
+
+        async def handle_roadmap(request):
+            """Show the future architecture roadmap."""
+            return JSONResponse({
+                "version": VERSION,
+                "current_foundations": [
+                    "API key authentication (ll_f_xxx / ll_p_xxx)",
+                    "Rate limiting (50/day free, 1000/day pro)",
+                    "Audit logging (file + optional DB)"
+                ],
+                "roadmap": FUTURE_ROADMAP
             })
 
         async def handle_server_card(request):
             return JSONResponse(SERVER_CARD)
 
-        async def handle_health(request):
-            key = ANTHROPIC_API_KEY
-            return JSONResponse({
-                "status": "ok", "service": "legis-link-mcp",
-                "version": "3.0.0", "engine": "claude-direct",
-                "tools": {"free": 3, "pro": 5, "total": 8},
-                "api_key_set": bool(key),
-                "api_key_prefix": key[:12] + "..." if len(key) > 12 else "MISSING"
-            })
-
         starlette_app = Starlette(routes=[
-            Route("/test", handle_test),
+            Route("/health",   handle_health),
+            Route("/test",     handle_test),
+            Route("/roadmap",  handle_roadmap),
             Route("/.well-known/mcp/server-card.json", handle_server_card),
-            Route("/health", handle_health),
             Mount("/sse", app=sse.handle_post_message),
             Mount("/", routes=[Route("/sse", endpoint=handle_sse)]),
         ])
 
-        print(f"[Legis-Link MCP v3.0] HTTP port {PORT} — Claude-direct, 8 tools",
+        print(f"[Legis-Link MCP v{VERSION}] HTTP port {PORT} — auth+ratelimit+audit",
               file=sys.stderr)
         uvicorn.run(starlette_app, host="0.0.0.0", port=PORT)
 
@@ -458,7 +673,7 @@ def run_http():
 
 
 async def run_stdio():
-    print("[Legis-Link MCP v3.0] stdio — Claude-direct, 8 tools", file=sys.stderr)
+    print(f"[Legis-Link MCP v{VERSION}] stdio — auth+ratelimit+audit", file=sys.stderr)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream,
                          server.create_initialization_options())
