@@ -79,9 +79,16 @@ VERSION           = "3.2.1"
 import pathlib as _pl
 
 def _page(name: str) -> str:
-    """Load page from same directory as script."""
-    p = _pl.Path(__file__).parent / name
-    return p.read_text(encoding="utf-8") if p.exists() else ""
+    """Load page — checks script dir, cwd, and Railway app dir."""
+    for base in [
+        _pl.Path(__file__).parent,
+        _pl.Path.cwd(),
+        _pl.Path("/app"),
+    ]:
+        p = base / name
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+    return ""
 
 
 # ── API Key Auth ────────────────────────────────────────────────────────────
