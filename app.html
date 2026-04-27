@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="theme-color" content="#0f172a"/>
+  <title>Legis-Link — Field Compliance</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #0a0f1a;
+      --surface:  #111827;
+      --border:   #1e293b;
+      --accent:   #3b82f6;
+      --accent2:  #06b6d4;
+      --text:     #f1f5f9;
+      --muted:    #64748b;
+      --green:    #10b981;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+      --mono:     'IBM Plex Mono', monospace;
+      --sans:     'IBM Plex Sans', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); }
+
+    /* ── Layout ── */
+    .app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    .header-logo { font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--accent); }
+    .header-logo span { color: var(--muted); }
+    .rate-pill {
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+      background: var(--border); border-radius: 20px; padding: 3px 10px;
+    }
+    .rate-pill.warn { color: var(--amber); }
+    .rate-pill.limit { color: var(--red); }
+
+    /* ── Context bar ── */
+    .context-bar {
+      display: flex; gap: 8px; padding: 10px 16px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .context-bar::-webkit-scrollbar { display: none; }
+    .ctx-select {
+      background: var(--border); border: 1px solid transparent;
+      border-radius: 8px; color: var(--text); font-family: var(--sans);
+      font-size: 12px; padding: 6px 10px; cursor: pointer; white-space: nowrap;
+      appearance: none; -webkit-appearance: none;
+    }
+    .ctx-select:focus { outline: none; border-color: var(--accent); }
+    .ctx-select option { background: var(--surface); }
+
+    /* ── Messages ── */
+    .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .messages::-webkit-scrollbar { width: 3px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .msg { display: flex; gap: 10px; max-width: 100%; animation: fadeUp 0.2s ease; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+    .msg.user { flex-direction: row-reverse; }
+    .msg-avatar {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 13px;
+    }
+    .msg.user .msg-avatar { background: var(--accent); color: white; }
+    .msg.bot  .msg-avatar { background: var(--border); color: var(--accent2); font-family: var(--mono); font-size: 11px; }
+
+    .msg-body { max-width: calc(100% - 40px); }
+    .msg-bubble {
+      padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6;
+    }
+    .msg.user .msg-bubble { background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+    .msg.bot  .msg-bubble { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+
+    .msg-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--mono); font-size: 11px; margin-top: 6px;
+      padding: 3px 8px; border-radius: 4px;
+    }
+    .status-ok     { background: rgba(16,185,129,0.1); color: var(--green); }
+    .status-warn   { background: rgba(245,158,11,0.1); color: var(--amber); }
+    .status-fail   { background: rgba(239,68,68,0.1);  color: var(--red); }
+    .msg-ref { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Quick actions ── */
+    .quick-wrap { padding: 8px 16px; display: flex; gap: 8px; overflow-x: auto; flex-shrink: 0; scrollbar-width: none; }
+    .quick-wrap::-webkit-scrollbar { display: none; }
+    .quick-btn {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; color: var(--muted); font-size: 12px;
+      padding: 6px 14px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .quick-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Input bar ── */
+    .input-bar {
+      display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px;
+      border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+    }
+    .input-wrap { flex: 1; position: relative; }
+    #query-input {
+      width: 100%; background: var(--border); border: 1px solid transparent;
+      border-radius: 12px; color: var(--text); font-family: var(--sans);
+      font-size: 14px; padding: 10px 14px; resize: none; line-height: 1.5;
+      max-height: 120px; overflow-y: auto;
+    }
+    #query-input:focus { outline: none; border-color: var(--accent); }
+    #query-input::placeholder { color: var(--muted); }
+
+    .btn-icon {
+      width: 40px; height: 40px; border-radius: 10px; border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0; transition: all 0.15s; font-size: 18px;
+    }
+    #voice-btn { background: var(--border); color: var(--muted); }
+    #voice-btn.listening { background: rgba(239,68,68,0.2); color: var(--red); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    #send-btn { background: var(--accent); color: white; }
+    #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Typing indicator ── */
+    .typing { display: flex; gap: 4px; padding: 10px 14px; }
+    .typing span { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+    /* ── Welcome ── */
+    .welcome { text-align: center; padding: 32px 16px; }
+    .welcome-icon { font-size: 40px; margin-bottom: 12px; }
+    .welcome h2 { font-family: var(--mono); font-size: 18px; color: var(--accent); margin-bottom: 8px; }
+    .welcome p  { font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 280px; margin: 0 auto; }
+
+    /* ── Offline banner ── */
+    .offline-banner {
+      display: none; background: rgba(245,158,11,0.1); border-bottom: 1px solid rgba(245,158,11,0.2);
+      color: var(--amber); font-size: 12px; text-align: center; padding: 6px;
+    }
+    body.offline .offline-banner { display: block; }
+
+    /* ── Upgrade prompt ── */
+    .upgrade-msg { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 10px; padding: 12px 14px; font-size: 13px; color: var(--accent2); }
+    .upgrade-msg a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <div class="offline-banner">⚡ Offline — showing cached results</div>
+
+  <header class="header">
+    <div class="header-logo">legis<span>-link</span></div>
+    <div class="rate-pill" id="rate-display">free · 50/day</div>
+  </header>
+
+  <div class="context-bar">
+    <select class="ctx-select" id="trade-select">
+      <option value="Electrical">⚡ Electrical</option>
+      <option value="Plumbing">🔧 Plumbing</option>
+      <option value="HVAC">💨 HVAC</option>
+      <option value="Welding">🔥 Welding</option>
+      <option value="Solar / Battery">🔋 Solar</option>
+      <option value="Carpentry">🪵 Carpentry</option>
+      <option value="Fire protection">🚒 Fire protection</option>
+      <option value="Concrete">🪨 Concrete</option>
+      <option value="Roofing">🏠 Roofing</option>
+      <option value="Gas fitting">🔩 Gas fitting</option>
+    </select>
+    <select class="ctx-select" id="region-select">
+      <option value="NSW">🇦🇺 NSW</option>
+      <option value="VIC">🇦🇺 VIC</option>
+      <option value="QLD">🇦🇺 QLD</option>
+      <option value="WA">🇦🇺 WA</option>
+      <option value="England">🇬🇧 England</option>
+      <option value="Scotland">🇬🇧 Scotland</option>
+      <option value="Texas">🇺🇸 Texas</option>
+      <option value="California">🇺🇸 California</option>
+      <option value="Ontario">🇨🇦 Ontario</option>
+      <option value="Germany">🇩🇪 Germany</option>
+    </select>
+    <select class="ctx-select" id="role-select">
+      <option value="Journeyman">Journeyman</option>
+      <option value="Apprentice">Apprentice</option>
+      <option value="Foreman">Foreman</option>
+      <option value="PM / Executive">PM</option>
+    </select>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="welcome">
+      <div class="welcome-icon">⚡</div>
+      <h2>Legis-Link</h2>
+      <p>Ask any compliance question in plain English. Get the exact code reference instantly.</p>
+    </div>
+  </div>
+
+  <div class="quick-wrap" id="quick-actions"></div>
+
+  <div class="input-bar">
+    <div class="input-wrap">
+      <textarea id="query-input" rows="1" placeholder="Ask a compliance question..." maxlength="500"></textarea>
+    </div>
+    <button class="btn-icon" id="voice-btn" title="Voice input">🎤</button>
+    <button class="btn-icon" id="send-btn" title="Send">→</button>
+  </div>
+
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+const CACHE_KEY = 'legis-link-queries';
+const MAX_CACHE = 10;
+const FREE_LIMIT = 50;
+
+// ── State ──────────────────────────────────────────────────────────────────
+let usageCount = parseInt(localStorage.getItem('ll-usage') || '0');
+let usageDate  = localStorage.getItem('ll-date') || '';
+const today    = new Date().toISOString().slice(0,10);
+if (usageDate !== today) { usageCount = 0; localStorage.setItem('ll-date', today); }
+
+// ── Quick actions by trade ─────────────────────────────────────────────────
+const QUICK = {
+  'Electrical':     ['Wire size for 20A circuit','Voltage drop check','Earth fault loop','RCD requirements'],
+  'Plumbing':       ['Pipe size for 50 fixtures','Hot water temp','Backflow prevention','Drain slope'],
+  'HVAC':           ['Duct size for 800 CFM','Refrigerant clearance','Ventilation rate','Filter MERV rating'],
+  'Welding':        ['Preheat temp for carbon steel','AWS qualification','Inspection requirements','Electrode storage'],
+  'Solar / Battery':['Battery clearance from wall','Inverter location','DC cable sizing','Protection requirements'],
+  'Carpentry':      ['Bearer span table','Joist size','Tie-down requirements','Fixing schedule'],
+  'Fire protection':['Detector spacing','Sprinkler clearance','Extinguisher placement','Exit sign height'],
+  'Concrete':       ['Cover to reinforcement','Curing time','Mix design','Compressive strength test'],
+  'Roofing':        ['Pitch requirements','Flashing details','Wind uplift','Sarking requirements'],
+  'Gas fitting':    ['Pipe sizing','Pressure test','Ventilation','Appliance clearance'],
+};
+
+function updateQuickActions() {
+  const trade = document.getElementById('trade-select').value;
+  const wrap  = document.getElementById('quick-actions');
+  const qs    = QUICK[trade] || [];
+  wrap.innerHTML = qs.map(q =>
+    `<button class="quick-btn" onclick="sendQuery('${q.replace(/'/g,"\\'")}')">
+      ${q}
+    </button>`
+  ).join('');
+}
+
+function updateRateDisplay() {
+  const pill = document.getElementById('rate-display');
+  const remaining = FREE_LIMIT - usageCount;
+  pill.textContent = `${remaining} left today`;
+  pill.className = 'rate-pill' + (remaining <= 10 ? ' warn' : '') + (remaining <= 0 ? ' limit' : '');
+}
+
+// ── Message rendering ──────────────────────────────────────────────────────
+function addMessage(role, content, meta = {}) {
+  const msgs = document.getElementById('messages');
+  const div  = document.createElement('div');
+  div.className = `msg ${role}`;
+
+  const avatar = role === 'user' ? '👤' : 'LL';
+  let html = `<div class="msg-avatar">${avatar}</div><div class="msg-body">`;
+  html += `<div class="msg-bubble">${content}</div>`;
+
+  if (meta.status && role === 'bot') {
+    const cls = meta.status === 'COMPLIANT' ? 'status-ok'
+              : meta.status === 'NON_COMPLIANT' ? 'status-fail' : 'status-warn';
+    html += `<div class="msg-status ${cls}">● ${meta.status.replace('_',' ')}</div>`;
+  }
+  if (meta.ref) {
+    html += `<div class="msg-ref">📋 ${meta.ref}</div>`;
+  }
+  html += '</div>';
+  div.innerHTML = html;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function addTyping() {
+  const msgs = document.getElementById('messages');
+  const div  = document.createElement('div');
+  div.className = 'msg bot';
+  div.id = 'typing-indicator';
+  div.innerHTML = `<div class="msg-avatar">LL</div>
+    <div class="msg-body"><div class="msg-bubble">
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div></div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeTyping() {
+  const t = document.getElementById('typing-indicator');
+  if (t) t.remove();
+}
+
+// ── Cache ──────────────────────────────────────────────────────────────────
+function saveToCache(query, result) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+    cache.push({ q: query, r: result, ts: Date.now() });
+    if (cache.length > MAX_CACHE) cache.shift();
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch(e) {}
+}
+
+function getFromCache(query) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+    return cache.find(c => c.q.toLowerCase() === query.toLowerCase()) || null;
+  } catch(e) { return null; }
+}
+
+// ── API call ───────────────────────────────────────────────────────────────
+async function callAPI(question) {
+  const trade  = document.getElementById('trade-select').value;
+  const region = document.getElementById('region-select').value;
+  const role   = document.getElementById('role-select').value;
+
+  const resp = await fetch(`${API_BASE}/api/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trade, region, role, question, api_key: 'dev_local' })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+// ── Send query ─────────────────────────────────────────────────────────────
+async function sendQuery(question) {
+  question = question || document.getElementById('query-input').value.trim();
+  if (!question) return;
+
+  // Rate limit check
+  if (usageCount >= FREE_LIMIT) {
+    addMessage('bot',
+      `<div class="upgrade-msg">Daily limit reached (${FREE_LIMIT} queries).<br>
+      <a href="/connect">Upgrade to Pro</a> for 1,000 queries/day.</div>`);
+    return;
+  }
+
+  document.getElementById('query-input').value = '';
+  document.getElementById('send-btn').disabled = true;
+
+  addMessage('user', question);
+  addTyping();
+
+  // Check offline cache first
+  const cached = !navigator.onLine ? getFromCache(question) : null;
+
+  try {
+    let data;
+    if (cached) {
+      data = cached.r;
+      removeTyping();
+      addMessage('bot', `${data.result} <span style="color:var(--muted);font-size:11px">(cached)</span>`,
+        { status: data.status, ref: data.code_reference });
+    } else {
+      data = await callAPI(question);
+      removeTyping();
+      addMessage('bot', data.result, { status: data.status, ref: data.code_reference });
+      saveToCache(question, data);
+
+      usageCount++;
+      localStorage.setItem('ll-usage', usageCount);
+      updateRateDisplay();
+    }
+  } catch(err) {
+    removeTyping();
+    if (err.message.includes('credit') || err.message.includes('billing')) {
+      addMessage('bot', '⚠️ Service temporarily unavailable. Please try again shortly.');
+    } else if (!navigator.onLine) {
+      addMessage('bot', '📵 Offline. Only cached answers available.');
+    } else {
+      addMessage('bot', `Error: ${err.message}`);
+    }
+  }
+
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('query-input').focus();
+}
+
+// ── Voice input ────────────────────────────────────────────────────────────
+let recognition = null;
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRec) {
+  recognition = new SpeechRec();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-AU';
+
+  recognition.onresult = e => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    document.getElementById('query-input').value = transcript;
+    if (e.results[e.results.length-1].isFinal) {
+      document.getElementById('voice-btn').classList.remove('listening');
+      sendQuery(transcript);
+    }
+  };
+
+  recognition.onend = () => {
+    document.getElementById('voice-btn').classList.remove('listening');
+  };
+
+  document.getElementById('voice-btn').addEventListener('click', () => {
+    const btn = document.getElementById('voice-btn');
+    if (btn.classList.contains('listening')) {
+      recognition.stop();
+    } else {
+      btn.classList.add('listening');
+      recognition.start();
+    }
+  });
+} else {
+  document.getElementById('voice-btn').style.display = 'none';
+}
+
+// ── Keyboard submit ────────────────────────────────────────────────────────
+document.getElementById('query-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendQuery();
+  }
+});
+
+document.getElementById('send-btn').addEventListener('click', () => sendQuery());
+
+// ── Auto-resize textarea ───────────────────────────────────────────────────
+document.getElementById('query-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// ── Trade change ───────────────────────────────────────────────────────────
+document.getElementById('trade-select').addEventListener('change', updateQuickActions);
+
+// ── Offline detection ──────────────────────────────────────────────────────
+window.addEventListener('online',  () => document.body.classList.remove('offline'));
+window.addEventListener('offline', () => document.body.classList.add('offline'));
+if (!navigator.onLine) document.body.classList.add('offline');
+
+// ── Service Worker ─────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+updateQuickActions();
+updateRateDisplay();
+</script>
+</body>
+</html>

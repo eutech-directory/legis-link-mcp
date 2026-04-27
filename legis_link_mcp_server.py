@@ -1,5 +1,5 @@
 """
-Legis-Link MCP Server v3.2.0
+Legis-Link MCP Server v3.2.1
 =============================
 Claude-direct engine with production foundations:
 
@@ -10,7 +10,7 @@ TIER 2 — PRO $199/year (8 tools, 1000 req/day):
   + calculate_technical_spec, generate_safety_checklist,
     generate_rams, verify_material_compliance, get_inspection_requirements
 
-PRODUCTION FOUNDATIONS (v3.2.0):
+PRODUCTION FOUNDATIONS (v3.2.1):
   ✓ API key authentication (ll_f_xxx free / ll_p_xxx pro)
   ✓ Rate limiting (50/day free, 1000/day pro)
   ✓ Audit logging (every tool call logged to DB)
@@ -74,7 +74,15 @@ MODEL             = "claude-haiku-4-5-20251001"
 PORT              = int(os.environ.get("PORT", 8000))
 DATABASE_URL      = os.environ.get("DATABASE_URL", "")
 PRO_UPGRADE       = "https://legis-link-mcp-production-3e9b.up.railway.app/upgrade"
-VERSION           = "3.2.0"
+VERSION           = "3.2.1"
+# ── Page content (loaded once at startup) ──────────────────────────────────
+import pathlib as _pl
+
+def _page(name: str) -> str:
+    """Load page from same directory as script."""
+    p = _pl.Path(__file__).parent / name
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
 
 # ── API Key Auth ────────────────────────────────────────────────────────────
 # Format: ll_f_<32hex> = free | ll_p_<32hex> = pro | dev_local = dev bypass
@@ -654,10 +662,89 @@ def run_http():
         async def handle_server_card(request):
             return JSONResponse(SERVER_CARD)
 
+        async def handle_app(request):
+            """PWA mobile chat UI."""
+            html = _page("app.html")
+            if not html:
+                html = "<html><body><h1>Legis-Link</h1><p>App page not found. Run deploy script.</p></body></html>"
+            from starlette.responses import HTMLResponse
+            return HTMLResponse(html)
+
+        async def handle_connect(request):
+            """MCP client connection guide."""
+            html = _page("connect.html")
+            if not html:
+                html = "<html><body><h1>Connect</h1><p>Connect page not found.</p></body></html>"
+            from starlette.responses import HTMLResponse
+            return HTMLResponse(html)
+
+        async def handle_manifest(request):
+            """PWA manifest."""
+            content = _page("manifest.json")
+            if not content:
+                content = '{"name":"Legis-Link","start_url":"/app","display":"standalone"}'
+            return JSONResponse(json.loads(content))
+
+        async def handle_sw(request):
+            """Service worker."""
+            from starlette.responses import Response
+            content = _page("sw.js") or "// service worker"
+            return Response(content, media_type="application/javascript")
+
+        async def handle_api_query(request):
+            """HTTP POST endpoint for /app page. Returns clean JSON."""
+            try:
+                body = await request.json()
+            except Exception:
+                return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+            question = body.get("question", "").strip()
+            trade    = body.get("trade", "Electrical")
+            region   = body.get("region", "NSW")
+            role     = body.get("role", "Journeyman")
+            api_key  = body.get("api_key", "")
+
+            if not question:
+                return JSONResponse({"error": "question required"}, status_code=400)
+
+            # Auth check
+            auth = validate_api_key(api_key)
+            if not auth["valid"]:
+                return JSONResponse({"error": auth["reason"]}, status_code=401)
+
+            tier = auth["tier"]
+
+            # Rate limit
+            rate = check_rate_limit(api_key, tier)
+            if not rate["allowed"]:
+                return JSONResponse({
+                    "error": f"Daily limit reached ({rate['limit']} requests). Resets tomorrow.",
+                    "upgrade": PRO_UPGRADE
+                }, status_code=429)
+
+            # Call Claude
+            user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
+            result   = await ask_claude(SYSTEM_PROMPTS["compliance"], user_msg)
+            audit_log(api_key, tier, "api_query", trade, region, result.get("status","OK"))
+
+            return JSONResponse({
+                "status":         result.get("status", "INFO"),
+                "result":         result.get("result", ""),
+                "code_reference": result.get("code_reference", ""),
+                "trade":          trade,
+                "region":         region,
+                "remaining":      rate["remaining"],
+            })
+
         starlette_app = Starlette(routes=[
-            Route("/health",   handle_health),
-            Route("/test",     handle_test),
-            Route("/roadmap",  handle_roadmap),
+            Route("/health",        handle_health),
+            Route("/test",          handle_test),
+            Route("/roadmap",       handle_roadmap),
+            Route("/app",           handle_app),
+            Route("/connect",       handle_connect),
+            Route("/manifest.json", handle_manifest),
+            Route("/sw.js",         handle_sw),
+            Route("/api/query",     handle_api_query, methods=["POST"]),
             Route("/.well-known/mcp/server-card.json", handle_server_card),
             Mount("/sse", app=sse.handle_post_message),
             Mount("/", routes=[Route("/sse", endpoint=handle_sse)]),
