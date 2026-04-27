@@ -668,19 +668,24 @@ def run_http():
 
         async def handle_app(request):
             """PWA mobile chat UI."""
+            from starlette.responses import HTMLResponse
             html = _page("app.html")
             if not html:
-                html = "<html><body><h1>Legis-Link</h1><p>App page not found. Run deploy script.</p></body></html>"
-            from starlette.responses import HTMLResponse
+                html = "<html><body><h1>Legis-Link</h1><p>App page not found.</p></body></html>"
+            # Strip surrogate characters that cause UnicodeEncodeError
+            html = html.encode("utf-8", errors="replace").decode("utf-8")
             return HTMLResponse(html)
 
-        async def handle_connect(request):
+        async def handle_connect_page(request):
             """MCP client connection guide."""
+            from starlette.responses import HTMLResponse
             html = _page("connect.html")
             if not html:
-                html = "<html><body><h1>Connect</h1><p>Connect page not found.</p></body></html>"
-            from starlette.responses import HTMLResponse
+                html = "<html><body><h1>Connect</h1></body></html>"
+            html = html.encode("utf-8", errors="replace").decode("utf-8")
             return HTMLResponse(html)
+
+
 
         async def handle_manifest(request):
             """PWA manifest."""
