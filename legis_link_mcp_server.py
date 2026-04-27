@@ -750,7 +750,7 @@ def run_http():
             Route("/test",          handle_test),
             Route("/roadmap",       handle_roadmap),
             Route("/app",           handle_app),
-            Route("/connect",       handle_connect),
+            Route("/connect",       handle_connect_page),
             Route("/manifest.json", handle_manifest),
             Route("/sw.js",         handle_sw),
             Route("/api/query",     handle_api_query, methods=["POST"]),
