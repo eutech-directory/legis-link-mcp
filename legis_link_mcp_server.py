@@ -838,6 +838,13 @@ def run_http():
 
             # Convert newlines to HTML breaks
             result_text = str(result_text).replace("\\n", "<br>").replace("\n", "<br>")
+            # Convert markdown bold **text** to HTML <strong>
+            import re as _re
+            result_text = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', result_text)
+            # Convert markdown headers # text to bold
+            result_text = _re.sub(r'<br>#+ (.+?)(<br>|$)', r'<br><strong>\1</strong>\2', result_text)
+            # Convert markdown list items - text to clean bullets
+            result_text = _re.sub(r'<br>   - ', r'<br>&nbsp;&nbsp;&bull; ', result_text)
 
             # Strip raw JSON artifacts if result looks like JSON
             stripped = result_text.strip().replace("<br>", "\n")
