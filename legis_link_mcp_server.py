@@ -808,7 +808,7 @@ def run_http():
             elif tool == "verify_material_compliance":
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nMaterial compliance check: {question}"
             elif tool == "get_inspection_requirements":
-                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nList all mandatory inspection hold points, who has authority to sign off each stage, what certificates are issued, and relevant regulations for: {question}"
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nFor: {question}\nList ALL mandatory inspection hold points as a simple numbered list. For each stage include: stage name, who inspects, certificate issued, key regulation. Keep each item to 2-3 lines. Plain text, no JSON, no tables."
             else:
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
             result   = await ask_claude(SYSTEM_PROMPTS[prompt_key], user_msg)
@@ -839,16 +839,37 @@ def run_http():
             # Convert newlines to HTML breaks
             result_text = str(result_text).replace("\\n", "<br>").replace("\n", "<br>")
 
-            # Strip raw JSON artifacts if result starts with {
-            if result_text.strip().startswith("{") and '"result"' in result_text:
+            # Strip raw JSON artifacts if result looks like JSON
+            stripped = result_text.strip().replace("<br>", "\n")
+            if stripped.startswith("{") or stripped.startswith("["):
                 import json as _json
                 try:
-                    parsed = _json.loads(result_text)
-                    result_text = parsed.get("result", result_text).replace("\n","<br>")
-                    if not result.get("status") or result.get("status") == "INFO":
-                        result["status"] = parsed.get("status", result.get("status","INFO"))
-                    if not result.get("code_reference"):
-                        result["code_reference"] = parsed.get("code_reference","")
+                    parsed = _json.loads(stripped)
+                    if isinstance(parsed, dict):
+                        # Extract readable content from nested JSON
+                        inner = parsed.get("result", "")
+                        if isinstance(inner, str) and len(inner) > 20:
+                            result_text = inner.replace("\n", "<br>")
+                        elif isinstance(parsed, dict) and "mandatory_inspections" in parsed:
+                            # Format inspection stages
+                            stages = parsed.get("mandatory_inspections", [])
+                            lines = []
+                            for i, s in enumerate(stages, 1):
+                                if isinstance(s, dict):
+                                    lines.append(f"<strong>{i}. {s.get('stage','')}</strong>")
+                                    lines.append(f"Inspector: {s.get('sign_off_authority','')}")
+                                    lines.append(f"Certificate: {s.get('certificate_issued','')}")
+                                    lines.append(f"Regulation: {s.get('regulation','')}")
+                                    lines.append("")
+                            result_text = "<br>".join(lines)
+                        if not result.get("status") or result.get("status") == "INFO":
+                            result["status"] = parsed.get("status", "COMPLIANT")
+                        if not result.get("code_reference"):
+                            refs = parsed.get("key_standards_and_regulations", [])
+                            if refs and isinstance(refs, list):
+                                result["code_reference"] = ", ".join(
+                                    r.get("standard", r.get("regulation","")) for r in refs[:3] if isinstance(r,dict)
+                                )
                 except Exception:
                     pass
 
