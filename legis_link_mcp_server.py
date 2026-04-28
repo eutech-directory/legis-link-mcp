@@ -798,21 +798,42 @@ def run_http():
                 "get_inspection_requirements":"inspection",
             }
             prompt_key = prompt_map.get(tool, "compliance")
-            user_msg   = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
-            # Add tool-specific context
+            # Build tool-specific user message
             if tool == "generate_rams":
-                user_msg += f"\nGenerate a full RAMS document for this task."
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nGenerate a full RAMS document for this task: {question}"
             elif tool == "generate_safety_checklist":
-                user_msg += f"\nGenerate a numbered safety checklist for this task."
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nGenerate a numbered safety checklist for: {question}"
+            elif tool == "calculate_technical_spec":
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nCalculate: {question}"
+            elif tool == "verify_material_compliance":
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nMaterial compliance check: {question}"
+            elif tool == "get_inspection_requirements":
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nInspection requirements for: {question}"
+            else:
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
             result   = await ask_claude(SYSTEM_PROMPTS[prompt_key], user_msg)
             audit_log(api_key, tier, tool, trade, region, result.get("status","OK"))
 
+            # Clean up result text for display
+            result_text = result.get("result", "")
+            # If result is a list/object (safety checklist sometimes returns array), convert
+            if isinstance(result_text, list):
+                result_text = "\n".join(
+                    item if isinstance(item, str) else str(item)
+                    for item in result_text
+                )
+            elif isinstance(result_text, dict):
+                result_text = result_text.get("result", str(result_text))
+            # Convert newlines to HTML breaks for display
+            result_text = str(result_text).replace("\n", "<br>").replace("\\n", "<br>")
+
             return JSONResponse({
                 "status":         result.get("status", "INFO"),
-                "result":         result.get("result", ""),
+                "result":         result_text,
                 "code_reference": result.get("code_reference", ""),
                 "trade":          trade,
                 "region":         region,
+                "tool":           tool,
                 "remaining":      rate["remaining"],
             })
 
