@@ -808,7 +808,7 @@ def run_http():
             elif tool == "verify_material_compliance":
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nMaterial compliance check: {question}"
             elif tool == "get_inspection_requirements":
-                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nInspection requirements for: {question}"
+                user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nList all mandatory inspection hold points, who has authority to sign off each stage, what certificates are issued, and relevant regulations for: {question}"
             else:
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
             result   = await ask_claude(SYSTEM_PROMPTS[prompt_key], user_msg)
@@ -816,16 +816,41 @@ def run_http():
 
             # Clean up result text for display
             result_text = result.get("result", "")
-            # If result is a list/object (safety checklist sometimes returns array), convert
+
+            # Handle list of dicts (safety checklist format)
             if isinstance(result_text, list):
-                result_text = "\n".join(
-                    item if isinstance(item, str) else str(item)
-                    for item in result_text
-                )
+                lines = []
+                for i, item in enumerate(result_text, 1):
+                    if isinstance(item, dict):
+                        req  = item.get("requirement", item.get("item", ""))
+                        ctrl = item.get("control_measure", "")
+                        reg  = item.get("regulation_reference", item.get("regulation", ""))
+                        lines.append(f"<strong>{i}. {req}</strong>")
+                        if ctrl: lines.append(f"Control: {ctrl}")
+                        if reg:  lines.append(f"<em>Reg: {reg}</em>")
+                        lines.append("")
+                    else:
+                        lines.append(str(item))
+                result_text = "<br>".join(lines)
+
             elif isinstance(result_text, dict):
                 result_text = result_text.get("result", str(result_text))
-            # Convert newlines to HTML breaks for display
-            result_text = str(result_text).replace("\n", "<br>").replace("\\n", "<br>")
+
+            # Convert newlines to HTML breaks
+            result_text = str(result_text).replace("\\n", "<br>").replace("\n", "<br>")
+
+            # Strip raw JSON artifacts if result starts with {
+            if result_text.strip().startswith("{") and '"result"' in result_text:
+                import json as _json
+                try:
+                    parsed = _json.loads(result_text)
+                    result_text = parsed.get("result", result_text).replace("\n","<br>")
+                    if not result.get("status") or result.get("status") == "INFO":
+                        result["status"] = parsed.get("status", result.get("status","INFO"))
+                    if not result.get("code_reference"):
+                        result["code_reference"] = parsed.get("code_reference","")
+                except Exception:
+                    pass
 
             return JSONResponse({
                 "status":         result.get("status", "INFO"),
