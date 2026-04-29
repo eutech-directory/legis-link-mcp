@@ -322,82 +322,201 @@ SERVER_CARD = {
         "header": "X-API-Key",
         "get_key": "https://legis-link-mcp-production-3e9b.up.railway.app",
         "tiers": {
-            "free": "50 requests/day, 3 tools — no signup needed, use key: dev_local for testing",
-            "pro":  "$199/year, 1000 requests/day, 8 tools"
+            "free": "50 requests/day, 3 tools — use api_key: dev_local for testing",
+            "pro":  "$199/year, 1000 requests/day, all 8 tools — https://rickyfarmer.gumroad.com/l/Legis-LinkPro"
         }
     },
     "tools": [
-        {"name": "check_compliance",
-         "description": "Answer construction trade compliance questions with code references. Free tier.",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":    {"type": "string", "enum": VALID_TRADES},
-             "region":   {"type": "string"},
-             "question": {"type": "string"},
-             "role":     {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
-             "api_key":  {"type": "string", "description": "Your Legis-Link API key"}
-         }, "required": ["trade", "region", "question"]}},
-        {"name": "get_code_reference",
-         "description": "Look up specific trade code sections and standards. Free tier.",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":   {"type": "string", "enum": VALID_TRADES},
-             "region":  {"type": "string"},
-             "topic":   {"type": "string"},
-             "api_key": {"type": "string"}
-         }, "required": ["trade", "region", "topic"]}},
-        {"name": "list_supported_regions",
-         "description": "List all supported regions for a given trade. Free tier.",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":   {"type": "string", "enum": VALID_TRADES},
-             "api_key": {"type": "string"}
-         }, "required": ["trade"]}},
-        {"name": "calculate_technical_spec",
-         "description": "[PRO] Calculate cable sizing, pipe sizing, HVAC loads, voltage drop.",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":       {"type": "string", "enum": VALID_TRADES},
-             "region":      {"type": "string"},
-             "calculation": {"type": "string"},
-             "role":        {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
-             "api_key":     {"type": "string"}
-         }, "required": ["trade", "region", "calculation"]}},
-        {"name": "generate_safety_checklist",
-         "description": "[PRO] Generate trade-specific safety checklist with regulatory citations.",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":   {"type": "string", "enum": VALID_TRADES},
-             "region":  {"type": "string"},
-             "task":    {"type": "string"},
-             "role":    {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
-             "api_key": {"type": "string"}
-         }, "required": ["trade", "region", "task"]}},
-        {"name": "generate_rams",
-         "description": "[PRO] Generate a Risk Assessment and Method Statement (RAMS/JHA).",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":        {"type": "string", "enum": VALID_TRADES},
-             "region":       {"type": "string"},
-             "task":         {"type": "string"},
-             "company_name": {"type": "string"},
-             "site_address": {"type": "string"},
-             "role":         {"type": "string", "enum": VALID_ROLES, "default": "Foreman"},
-             "api_key":      {"type": "string"}
-         }, "required": ["trade", "region", "task"]}},
-        {"name": "verify_material_compliance",
-         "description": "[PRO] Check material spec against local code.",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":    {"type": "string", "enum": VALID_TRADES},
-             "region":   {"type": "string"},
-             "material": {"type": "string"},
-             "use_case": {"type": "string"},
-             "role":     {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
-             "api_key":  {"type": "string"}
-         }, "required": ["trade", "region", "material"]}},
-        {"name": "get_inspection_requirements",
-         "description": "[PRO] Get mandatory inspection and certification requirements.",
-         "inputSchema": {"type": "object", "properties": {
-             "trade":        {"type": "string", "enum": VALID_TRADES},
-             "region":       {"type": "string"},
-             "installation": {"type": "string"},
-             "role":         {"type": "string", "enum": VALID_ROLES, "default": "Journeyman"},
-             "api_key":      {"type": "string"}
-         }, "required": ["trade", "region", "installation"]}},
+        {
+            "name": "check_compliance",
+            "description": (
+                "Answers construction trade compliance questions with exact code references and clause citations. "
+                "Use this tool when a tradesperson or engineer asks whether a specific installation, practice, or "
+                "configuration is compliant with local regulations. Returns a COMPLIANT, NON_COMPLIANT, or "
+                "REQUIRES_VERIFICATION status with the precise standard (e.g. AS/NZS 3000:2018 Clause 3.2.4) and "
+                "any critical caveats. Covers electrical, plumbing, HVAC, welding, carpentry, roofing, gas fitting, "
+                "solar, fire protection, and concrete trades across Australia, UK, USA, Canada, and EU. "
+                "Do NOT use this tool for numerical calculations (use calculate_technical_spec instead) or for "
+                "generating safety checklists or RAMS documents."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":    {"type": "string", "enum": VALID_TRADES,
+                             "description": "The construction trade relevant to the question. Must match a supported trade exactly."},
+                "region":   {"type": "string",
+                             "description": "Jurisdiction for the compliance check. Examples: 'NSW', 'England', 'Texas', 'Ontario', 'Germany'. Determines which standard applies."},
+                "question": {"type": "string",
+                             "description": "The compliance question in plain English. Be specific: include voltages, distances, materials, or load values where relevant. Example: 'Is 2.5mm2 TPS cable compliant for a 20A circuit in a wall cavity?'"},
+                "role":     {"type": "string", "enum": VALID_ROLES, "default": "Journeyman",
+                             "description": "The role of the person asking. Affects the depth and terminology of the answer."},
+                "api_key":  {"type": "string",
+                             "description": "Legis-Link API key. Use 'dev_local' for testing. Get a free key at https://legis-link-mcp-production-3e9b.up.railway.app"}
+            }, "required": ["trade", "region", "question"]}
+        },
+        {
+            "name": "get_code_reference",
+            "description": (
+                "Retrieves specific code sections, standards, and regulatory references for a construction trade topic. "
+                "Use this tool when you need to cite the exact standard document, clause number, table reference, or "
+                "regulatory instrument — without asking a yes/no compliance question. "
+                "Returns the standard name, edition year, specific clause or table, and a plain-English summary of "
+                "what that clause requires. Useful for pre-populating compliance documents, RAMS, or certificates. "
+                "Examples: 'AS/NZS 3008 cable sizing tables', 'CDM 2015 notification thresholds', 'NEC Article 210 branch circuits'."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":   {"type": "string", "enum": VALID_TRADES,
+                            "description": "The construction trade for which you need a code reference."},
+                "region":  {"type": "string",
+                            "description": "Jurisdiction. Determines which edition of the standard applies. Examples: 'NSW', 'England', 'California'."},
+                "topic":   {"type": "string",
+                            "description": "The specific topic or subject to look up. Example: 'cable sizing for final sub-circuits', 'maximum water heater temperature', 'roof pitch minimums'."},
+                "api_key": {"type": "string", "description": "Legis-Link API key. Use 'dev_local' for testing."}
+            }, "required": ["trade", "region", "topic"]}
+        },
+        {
+            "name": "list_supported_regions",
+            "description": (
+                "Lists all jurisdictions and regions supported by Legis-Link for a specific trade. "
+                "Use this tool before calling other tools to confirm that the target region is supported, "
+                "or to discover available regions when the user has not specified one. "
+                "Returns a structured list of countries and their sub-regions (states, provinces, nations) "
+                "along with the primary standards that apply in each region."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":   {"type": "string", "enum": VALID_TRADES,
+                            "description": "The trade for which to list supported regions."},
+                "api_key": {"type": "string", "description": "Legis-Link API key. Use 'dev_local' for testing."}
+            }, "required": ["trade"]}
+        },
+        {
+            "name": "calculate_technical_spec",
+            "description": (
+                "[PRO] Performs numerical technical calculations for construction trades with code-compliant results. "
+                "Use this tool when a specific measurement, size, rating, or capacity needs to be calculated — "
+                "not just checked for compliance. Returns the calculated value with units, the method or formula used, "
+                "relevant derating or correction factors, and the code reference that governs the calculation. "
+                "Supports: cable/conductor sizing (mm2 or AWG), voltage drop (%), pipe sizing (mm or inches), "
+                "HVAC duct sizing (CFM/L/s), heat load calculations, load current calculations, and more. "
+                "Example inputs: 'Cable size for 32A circuit, 25m run, 240V single phase, clipped direct', "
+                "'Pipe size for 40 fixture units copper hot water supply', 'Duct size for 1200 CFM round duct'."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":       {"type": "string", "enum": VALID_TRADES,
+                                "description": "The trade for this calculation. Determines the applicable standard and units."},
+                "region":      {"type": "string",
+                                "description": "Jurisdiction. Affects which standard and units apply (e.g. mm2 for AU/UK, AWG for USA)."},
+                "calculation": {"type": "string",
+                                "description": "Describe the calculation needed with all relevant parameters. Include: load/flow value, distance/length, voltage/pressure, installation method, ambient conditions. Example: 'Cable size for 45A, 30m run, 240V, single phase, in conduit, 35 degrees ambient'."},
+                "role":        {"type": "string", "enum": VALID_ROLES, "default": "Journeyman",
+                                "description": "User role. Affects detail level of the output."},
+                "api_key":     {"type": "string", "description": "Pro API key required. Get at https://rickyfarmer.gumroad.com/l/Legis-LinkPro"}
+            }, "required": ["trade", "region", "calculation"]}
+        },
+        {
+            "name": "generate_safety_checklist",
+            "description": (
+                "[PRO] Generates a numbered safety checklist for a specific construction task with PPE requirements, "
+                "hazard controls, and regulatory citations for each item. "
+                "Use this tool when a foreman or safety officer needs a task-specific checklist before work begins. "
+                "Each checklist item includes: the safety requirement, the specific control measure, and the "
+                "regulation or standard that mandates it (e.g. WHS Act 2011, CDM 2015, OSHA 29 CFR 1926). "
+                "Do NOT use this tool to generate a full RAMS document — use generate_rams for that. "
+                "Example tasks: 'working at height on a residential roof', 'hot work near fuel lines', "
+                "'isolating and working on a 415V switchboard'."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":   {"type": "string", "enum": VALID_TRADES,
+                            "description": "The trade performing the task."},
+                "region":  {"type": "string",
+                            "description": "Jurisdiction. Determines which WHS/HSE regulations and codes of practice apply."},
+                "task":    {"type": "string",
+                            "description": "Specific task description. Be precise about the activity, location, and any known hazards. Example: 'Installing 415V switchboard in an occupied commercial building, working at 3m height'."},
+                "role":    {"type": "string", "enum": VALID_ROLES, "default": "Journeyman",
+                            "description": "Role of the person who will use the checklist."},
+                "api_key": {"type": "string", "description": "Pro API key required."}
+            }, "required": ["trade", "region", "task"]}
+        },
+        {
+            "name": "generate_rams",
+            "description": (
+                "[PRO] Generates a complete Risk Assessment and Method Statement (RAMS) document — "
+                "called a Job Hazard Analysis (JHA) in the USA or Safe Work Method Statement (SWMS) in Australia. "
+                "Use this tool when a foreman or PM needs a formal safety document before a high-risk task. "
+                "Output includes: Section 1 — Hazard Register (tabular, with severity/likelihood/risk rating/controls/regulations), "
+                "Section 2 — Method Statement (numbered sequential steps), "
+                "Section 3 — Required Qualifications and Certifications. "
+                "The document is formatted for printing or inclusion in a site safety file. "
+                "This tool produces a longer output than other tools — expect 800-1500 words. "
+                "Example tasks: 'Electrical switchboard installation in commercial building NSW', "
+                "'Gas line installation in residential kitchen UK', 'Roof framing timber frame residential NSW'."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":        {"type": "string", "enum": VALID_TRADES,
+                                 "description": "The trade performing the work."},
+                "region":       {"type": "string",
+                                 "description": "Jurisdiction. Determines applicable WHS/CDM/OSHA legislation cited in the document."},
+                "task":         {"type": "string",
+                                 "description": "Full description of the task requiring the RAMS. Include: what work, where, at what height or voltage, any confined space, any hot work. The more detail, the more accurate the hazard register."},
+                "company_name": {"type": "string",
+                                 "description": "Optional. Company name to include in the document header."},
+                "site_address": {"type": "string",
+                                 "description": "Optional. Site address to include in the document header."},
+                "role":         {"type": "string", "enum": VALID_ROLES, "default": "Foreman",
+                                 "description": "Role of the person generating the RAMS. Foreman or PM recommended."},
+                "api_key":      {"type": "string", "description": "Pro API key required."}
+            }, "required": ["trade", "region", "task"]}
+        },
+        {
+            "name": "verify_material_compliance",
+            "description": (
+                "[PRO] Checks whether a specific material, product, or component meets the code requirements "
+                "for a given trade application and jurisdiction. Returns COMPLIANT, NON_COMPLIANT, or "
+                "REQUIRES_VERIFICATION with the specific clause that governs the material selection, "
+                "and — if non-compliant — the compliant alternative. "
+                "Use this tool BEFORE ordering materials to avoid costly substitutions on site. "
+                "Do NOT use this tool for general compliance questions — use check_compliance instead. "
+                "Example inputs: '2.5mm2 TPS cable for 20A underground direct burial circuit NSW', "
+                "'Class 12 copper pipe for domestic hot water NSW', "
+                "'R3.5 glasswool batts for external wall cavity UK Building Regs'."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":    {"type": "string", "enum": VALID_TRADES,
+                             "description": "The trade context for this material check."},
+                "region":   {"type": "string",
+                             "description": "Jurisdiction. Determines which product standards and approval schemes apply."},
+                "material": {"type": "string",
+                             "description": "The material or product to check. Include: product name or type, specification or rating, and manufacturer if known. Example: '2.5mm2 TPS twin and earth, 450/750V rating, PVC insulation'."},
+                "use_case": {"type": "string", "default": "standard installation",
+                             "description": "Where and how the material will be used. Include installation method, environmental conditions, load. Example: 'underground direct burial, 20A circuit, 30m run, clay soil'."},
+                "role":     {"type": "string", "enum": VALID_ROLES, "default": "Journeyman",
+                             "description": "Role of the person checking the material."},
+                "api_key":  {"type": "string", "description": "Pro API key required."}
+            }, "required": ["trade", "region", "material"]}
+        },
+        {
+            "name": "get_inspection_requirements",
+            "description": (
+                "[PRO] Returns all mandatory inspection hold points, sign-off authorities, certificates to be issued, "
+                "and notification requirements for a construction installation in a specific jurisdiction. "
+                "Use this tool when a foreman or PM needs to know: who must inspect, at what stage work must stop, "
+                "what certificate is issued, and which regulation mandates the inspection. "
+                "Prevents costly rework caused by covering work before mandatory inspection. "
+                "Returns a numbered list of inspection stages with: inspector role/authority, certificate type and "
+                "form number, regulatory reference, and notification timing. "
+                "Example installations: 'residential electrical installation NSW', "
+                "'timber frame residential build NSW', 'gas fitting domestic kitchen UK'."
+            ),
+            "inputSchema": {"type": "object", "properties": {
+                "trade":        {"type": "string", "enum": VALID_TRADES,
+                                 "description": "The trade performing the installation."},
+                "region":       {"type": "string",
+                                 "description": "Jurisdiction. Inspection authorities and certificate types vary significantly by region."},
+                "installation": {"type": "string",
+                                 "description": "Description of the installation requiring inspection. Be specific about scope. Example: 'new 3-bedroom residential electrical installation including switchboard, circuits, and solar inverter connection, NSW'."},
+                "role":         {"type": "string", "enum": VALID_ROLES, "default": "Journeyman",
+                                 "description": "Role of the person requesting the inspection requirements."},
+                "api_key":      {"type": "string", "description": "Pro API key required."}
+            }, "required": ["trade", "region", "installation"]}
+        },
     ],
     "resources": [],
     "prompts": []
