@@ -1,4 +1,6 @@
-﻿# Legis-Link MCP
+﻿[![legis-link-mcp MCP server](https://glama.ai/mcp/servers/eutech-directory/legis-link-mcp/badges/score.svg)](https://glama.ai/mcp/servers/eutech-directory/legis-link-mcp)
+
+# Legis-Link MCP
 
 Construction trade compliance MCP server. Covers electrical, plumbing, HVAC, welding, roofing, gas fitting, solar and more across Australia, UK, USA, Canada and EU.
 
@@ -45,3 +47,4 @@ https://smithery.ai/server/ricky-farmerai/construction-legis-link-mcp
 ## License
 
 MIT
+
