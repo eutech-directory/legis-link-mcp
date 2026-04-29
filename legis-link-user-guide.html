@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legis-Link — Getting Started Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #185FA5;
+    --blue-dark: #0C447C;
+    --blue-light: #E6F1FB;
+    --green: #27500A;
+    --green-light: #EAF3DE;
+    --amber: #633806;
+    --amber-light: #FAEEDA;
+    --text: #1a1a18;
+    --text2: #5a5a56;
+    --text3: #9a9890;
+    --bg: #fafaf8;
+    --white: #ffffff;
+    --border: rgba(0,0,0,0.08);
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 16px;
+  }
+
+  /* ── Header ── */
+  .hero {
+    background: var(--blue);
+    color: white;
+    padding: 56px 24px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 50%, rgba(255,255,255,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 20%, rgba(255,255,255,0.04) 0%, transparent 50%);
+  }
+  .hero-inner { position: relative; max-width: 640px; margin: 0 auto; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(32px, 6vw, 48px);
+    font-weight: 400;
+    line-height: 1.15;
+    margin-bottom: 14px;
+    letter-spacing: -0.02em;
+  }
+  .hero p {
+    font-size: 17px;
+    opacity: 0.85;
+    max-width: 480px;
+    margin: 0 auto 28px;
+    font-weight: 300;
+  }
+  .hero-url {
+    display: inline-block;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: white;
+    text-decoration: none;
+  }
+  .hero-url:hover { background: rgba(255,255,255,0.2); }
+
+  /* ── Container ── */
+  .container { max-width: 680px; margin: 0 auto; padding: 0 20px; }
+
+  /* ── Section ── */
+  .section { padding: 48px 0 0; }
+  .section-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    background: var(--blue);
+    color: white;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .section h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 26px;
+    font-weight: 400;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .section-sub { color: var(--text2); font-size: 15px; margin-bottom: 24px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .card-title { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+  .card-body { color: var(--text2); font-size: 14px; line-height: 1.65; }
+
+  /* ── Steps ── */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: flex;
+    gap: 18px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .step:last-child { border-bottom: none; }
+  .step-num {
+    width: 32px; height: 32px;
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-content h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .step-content p { color: var(--text2); font-size: 14px; line-height: 1.6; }
+  .step-content .note {
+    display: inline-block;
+    background: var(--amber-light);
+    color: var(--amber);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 6px;
+  }
+
+  /* ── Example questions ── */
+  .questions { display: flex; flex-direction: column; gap: 10px; }
+  .question-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    box-shadow: var(--shadow);
+  }
+  .q-trade {
+    flex-shrink: 0;
+    font-size: 20px;
+    margin-top: 1px;
+  }
+  .q-body { flex: 1; }
+  .q-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+    font-style: italic;
+  }
+  .q-trade-label {
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .q-result {
+    font-size: 12px;
+    color: var(--green);
+    background: var(--green-light);
+    border-radius: 4px;
+    padding: 1px 7px;
+    display: inline-block;
+    margin-top: 4px;
+    font-weight: 500;
+  }
+
+  /* ── Trades grid ── */
+  .trades-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .trade-pill {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .trade-pill .icon { font-size: 22px; margin-bottom: 4px; }
+  .trade-pill .name { font-size: 12px; font-weight: 500; color: var(--text2); }
+
+  /* ── Regions ── */
+  .regions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .region-tag {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--blue-light);
+    border: 1px solid rgba(24,95,165,0.15);
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    margin: 20px 0;
+  }
+  .callout-icon { font-size: 20px; flex-shrink: 0; }
+  .callout-body { font-size: 14px; color: var(--blue-dark); line-height: 1.6; }
+  .callout-body strong { font-weight: 600; }
+
+  /* ── Divider ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 48px 0 0;
+  }
+
+  /* ── Footer ── */
+  footer {
+    padding: 40px 24px 48px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 13px;
+  }
+  footer a { color: var(--blue); text-decoration: none; }
+
+  /* ── CTA button ── */
+  .cta-block {
+    text-align: center;
+    padding: 40px 0 0;
+  }
+  .cta-btn {
+    display: inline-block;
+    background: var(--blue);
+    color: white;
+    padding: 14px 32px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
+    letter-spacing: 0.01em;
+  }
+  .cta-btn:hover { background: var(--blue-dark); }
+  .cta-note { margin-top: 10px; font-size: 13px; color: var(--text3); }
+
+  @media (max-width: 480px) {
+    .hero { padding: 40px 20px 36px; }
+    .trades-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media print {
+    .hero { background: #185FA5 !important; -webkit-print-color-adjust: exact; }
+    body { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">⚡ Getting started guide</div>
+    <h1>Compliance answers<br>in your pocket</h1>
+    <p>Legis-Link gives you instant code answers on site — no books, no waiting, no guessing.</p>
+    <a href="https://legis-link-mcp-production-3e9b.up.railway.app/app" class="hero-url" target="_blank">
+      legis-link-mcp-production-3e9b.up.railway.app/app
+    </a>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- What is it -->
+  <div class="section">
+    <div class="section-num">?</div>
+    <h2>What is Legis-Link?</h2>
+    <p class="section-sub">A free compliance tool you open in your phone browser — no app to install.</p>
+
+    <div class="card">
+      <div class="card-title">Ask a compliance question in plain English</div>
+      <div class="card-body">Type your question the way you'd ask a colleague — "what wire size for 45A over 30 metres?" — and get an instant answer with the exact code reference and clause. Every answer tells you which standard it came from and links to the full document.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Built for the job site, not the office</div>
+      <div class="card-body">Works on any phone, any browser. No app store, no account required to use the chat. Takes 5 seconds to open and get an answer. Results are formatted for a small screen.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Every check is logged automatically</div>
+      <div class="card-body">Every compliance check creates a tamper-proof audit record. Foremen can seal records and generate printable compliance certificates. PMs can view the full audit log from the dashboard.</div>
+    </div>
+  </div>
+
+  <!-- Trades -->
+  <div class="section">
+    <div class="section-num">🔧</div>
+    <h2>Works for every trade</h2>
+    <p class="section-sub">Pick your trade when you open the tool and it shows only the tools relevant to your work.</p>
+
+    <div class="trades-grid">
+      <div class="trade-pill"><div class="icon">⚡</div><div class="name">Electrical</div></div>
+      <div class="trade-pill"><div class="icon">🔧</div><div class="name">Plumbing</div></div>
+      <div class="trade-pill"><div class="icon">💨</div><div class="name">HVAC</div></div>
+      <div class="trade-pill"><div class="icon">🔥</div><div class="name">Welding</div></div>
+      <div class="trade-pill"><div class="icon">🔋</div><div class="name">Solar / Battery</div></div>
+      <div class="trade-pill"><div class="icon">🪵</div><div class="name">Carpentry</div></div>
+      <div class="trade-pill"><div class="icon">🚒</div><div class="name">Fire protection</div></div>
+      <div class="trade-pill"><div class="icon">🪨</div><div class="name">Concrete</div></div>
+      <div class="trade-pill"><div class="icon">🏠</div><div class="name">Roofing</div></div>
+      <div class="trade-pill"><div class="icon">🔩</div><div class="name">Gas fitting</div></div>
+    </div>
+  </div>
+
+  <!-- Regions -->
+  <div class="section">
+    <div class="section-num">🌍</div>
+    <h2>Covers your jurisdiction</h2>
+    <p class="section-sub">Each region uses the correct standard — not a one-size-fits-all approximation.</p>
+
+    <div class="regions">
+      <div class="region-tag">🇦🇺 Australia — AS/NZS 3000, NCC, WHS</div>
+      <div class="region-tag">🇺🇸 USA — NEC 2026, IPC, IMC, OSHA</div>
+      <div class="region-tag">🇨🇦 Canada — CSA C22.1, NPC, NBC</div>
+      <div class="region-tag">🇬🇧 UK — BS 7671, Building Regs, Gas Safe</div>
+      <div class="region-tag">🇪🇺 EU — IEC 60364, EN 806, EN 13779</div>
+    </div>
+  </div>
+
+  <!-- How to use -->
+  <div class="section">
+    <div class="section-num">1</div>
+    <h2>How to use it</h2>
+    <p class="section-sub">Three steps and you have your answer.</p>
+
+    <div class="card">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>Open the tool in your browser</h3>
+            <p>Go to <strong>legis-link-mcp-production-3e9b.up.railway.app/app</strong> on any phone or computer. No download, no account needed.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>Pick your role, trade, and location</h3>
+            <p>Tap your role (Apprentice, Journeyman, Foreman, PM), your trade, and your state or country. The tool loads only the checks relevant to your work.</p>
+            <span class="note">Takes about 10 seconds</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>Ask your question</h3>
+            <p>Type it in plain English or tap one of the quick-action buttons. You get an instant result with the conductor size, clearance distance, or code reference — plus a link to the full standard.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Example questions -->
+  <div class="section">
+    <div class="section-num">💬</div>
+    <h2>What to ask</h2>
+    <p class="section-sub">Type questions the way you'd say them on site. These all work:</p>
+
+    <div class="questions">
+      <div class="question-card">
+        <div class="q-trade">⚡</div>
+        <div class="q-body">
+          <div class="q-text">"Wire size for 45A load, 30 metres, 240V single phase"</div>
+          <div class="q-trade-label">Electrical · AU-NSW</div>
+          <div class="q-result">→ 10mm² conductor, 1.97% VD — AS3000 Table C1</div>
+        </div>
+      </div>
+      <div class="question-card">
+        <div class="q-trade">🔋</div>
+        <div class="q-body">
+          <div class="q-text">"Is 250mm clearance from a timber wall OK for a 13.5kWh battery?"</div>
+          <div class="q-trade-label">Solar · AU-VIC</div>
+          <div class="q-result">→ Non-compliant — 600mm required, FC sheet option</div>
+        </div>
+      </div>
+      <div class="question-card">
+        <div class="q-trade">⚡</div>
+        <div class="q-body">
+          <div class="q-text">"Load calculation for 18000VA connected load with 2 EV chargers"</div>
+          <div class="q-trade-label">Electrical · USA-TX</div>
+          <div class="q-result">→ 35.4kVA design load, 150A OCPD — NEC Art.120.5(D)</div>
+        </div>
+      </div>
+      <div class="question-card">
+        <div class="q-trade">🔥</div>
+        <div class="q-body">
+          <div class="q-text">"Minimum preheat for 0.22% carbon steel, 25mm plate"</div>
+          <div class="q-trade-label">Welding · UK-ENG</div>
+          <div class="q-result">→ 66°C minimum — AWS D1.1 Table 4.5</div>
+        </div>
+      </div>
+      <div class="question-card">
+        <div class="q-trade">🔧</div>
+        <div class="q-body">
+          <div class="q-text">"Pipe size for 50 fixture units copper supply"</div>
+          <div class="q-trade-label">Plumbing · CA-ON</div>
+          <div class="q-result">→ 40mm pipe — NPC 2020 Table 7.4.1</div>
+        </div>
+      </div>
+      <div class="question-card">
+        <div class="q-trade">💨</div>
+        <div class="q-body">
+          <div class="q-text">"Duct size for 800 CFM airflow round duct"</div>
+          <div class="q-trade-label">HVAC · USA-CA</div>
+          <div class="q-result">→ 13" diameter, 868 FPM — SMACNA / IMC 2024</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Roles -->
+  <div class="section">
+    <div class="section-num">👷</div>
+    <h2>What each role can do</h2>
+    <p class="section-sub">Access is based on your role — apprentices, journeymen, foremen, and PMs each see what's relevant to them.</p>
+
+    <div class="card">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num" style="background:#E6F1FB;color:#0C447C">A</div>
+          <div class="step-content">
+            <h3>Apprentice</h3>
+            <p>Run compliance checks, look up code references, flag issues on site. Read-only access.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num" style="background:#EAF3DE;color:#27500A">J</div>
+          <div class="step-content">
+            <h3>Journeyman</h3>
+            <p>Everything an apprentice can do, plus run detailed calculations and draft compliance records.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num" style="background:#FAEEDA;color:#633806">F</div>
+          <div class="step-content">
+            <h3>Foreman</h3>
+            <p>Seal compliance records with a cryptographic signature, review apprentice handoffs, access the foreman dashboard with site overview and activity log.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num" style="background:#185FA5;color:white">P</div>
+          <div class="step-content">
+            <h3>PM / Executive</h3>
+            <p>Full audit log export (CSV), compliance rate by trade, foreman override tracking. Access the executive dashboard at <strong>/executive</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register -->
+  <div class="section">
+    <div class="section-num">🔐</div>
+    <h2>Creating an account</h2>
+    <p class="section-sub">The chat tool works without an account. To access dashboards and seal records, register first.</p>
+
+    <div class="card">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>Go to the login page</h3>
+            <p>Visit <strong>legis-link-mcp-production-3e9b.up.railway.app/app</strong> and click <strong>Register</strong>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>Fill in your details</h3>
+            <p>Name, email, password, role, trade, location, and your licence number. Your licence number will be manually verified against the government registry before your account is approved.</p>
+            <span class="note">Admin approval required before first login</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>Wait for approval</h3>
+            <p>Your admin verifies your licence on the government portal and approves your account. You'll be able to log in once approved.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h3>Log in and go</h3>
+            <p>Use your email and password to log in. You'll go straight to the compliance chat. Foremen and PMs also have access to their dashboards.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Callout -->
+  <div class="callout">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>No account needed for the chat tool.</strong> Go straight to <strong>/app</strong>, pick your trade and location, and start asking questions. Registration is only needed for sealing records, accessing dashboards, and the audit log.
+    </div>
+  </div>
+
+  <!-- Compliance certificate -->
+  <div class="section">
+    <div class="section-num">📄</div>
+    <h2>Compliance certificates</h2>
+    <p class="section-sub">Every sealed record generates a printable certificate you can hand to an inspector or PM.</p>
+
+    <div class="card">
+      <div class="card-title">How to get a certificate</div>
+      <div class="card-body">Run a compliance check → note the Event ID in the result → go to <strong>/certificate/YOUR-EVENT-ID</strong> → print or save as PDF. The certificate shows the result, code citation, verification URL, and a cryptographic audit ID that proves it hasn't been altered.</div>
+    </div>
+  </div>
+
+  <!-- Tips -->
+  <div class="section">
+    <div class="section-num">✓</div>
+    <h2>Tips for best results</h2>
+    <p class="section-sub">The tool understands plain English — these habits get you faster, better answers.</p>
+
+    <div class="card">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num" style="background:var(--green-light);color:var(--green)">✓</div>
+          <div class="step-content">
+            <h3>Include the numbers</h3>
+            <p>"Wire size for 45A, 30m, 240V" gives a precise result. "What size wire do I need?" gives a general answer. The more specific you are, the more accurate the calculation.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num" style="background:var(--green-light);color:var(--green)">✓</div>
+          <div class="step-content">
+            <h3>Set your location first</h3>
+            <p>Always pick your jurisdiction before asking questions. The same load in NSW and Texas gets different conductor sizes from different standards — the location is what determines which code applies.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num" style="background:var(--green-light);color:var(--green)">✓</div>
+          <div class="step-content">
+            <h3>Use the quick-action buttons</h3>
+            <p>After setting context, tap the chips at the bottom of the screen — Wire sizing, Load calc, Battery clearance, etc. They pre-fill a useful question template for your trade.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num" style="background:var(--amber-light);color:var(--amber)">!</div>
+          <div class="step-content">
+            <h3>Always verify before ordering materials</h3>
+            <p>Legis-Link results are preliminary checks based on published standard tables. For final installation decisions, confirm against the full published standard or consult a licensed engineer.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-block">
+    <a href="https://legis-link-mcp-production-3e9b.up.railway.app/app" class="cta-btn" target="_blank">
+      Open Legis-Link →
+    </a>
+    <p class="cta-note">No account required · Works on any phone · Free</p>
+  </div>
+
+  <div class="divider"></div>
+
+</div>
+
+<footer>
+  <p style="margin-bottom:8px"><strong>Legis-Link</strong> — Construction Compliance AI</p>
+  <p>
+    <a href="https://legis-link-mcp-production-3e9b.up.railway.app/app">Compliance chat</a> &nbsp;·&nbsp;
+    <a href="https://legis-link-mcp-production-3e9b.up.railway.app/app">Register</a> &nbsp;·&nbsp;
+    <a href="https://legis-link-mcp-production-3e9b.up.railway.app/dashboard">Foreman dashboard</a> &nbsp;·&nbsp;
+    <a href="https://legis-link-mcp-production-3e9b.up.railway.app/app">Executive dashboard</a>
+  </p>
+  <p style="margin-top:12px;color:#b0aead;font-size:12px">Results are preliminary estimates. Always verify against the full published standard before proceeding with any installation.</p>
+</footer>
+
+</body>
+</html>
+HTMLEOF
