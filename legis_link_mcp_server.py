@@ -76,7 +76,43 @@ DATABASE_URL      = os.environ.get("DATABASE_URL", "")
 OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_URL        = "https://api.openai.com/v1/chat/completions"
 OPENAI_MODEL      = "gpt-4o-mini"
-PRO_UPGRADE       = "https://legis-link-mcp-production-3e9b.up.railway.app/upgrade"
+PRO_UPGRADE       = "https://rickyfarmer.gumroad.com/l/Legis-LinkPro"
+KEY_SECRET        = os.environ.get("LEGIS_KEY_SECRET", "legis-link-pro-secret-2026").encode()
+
+def generate_pro_key(email: str) -> str:
+    import hmac as _h, hashlib as _hs
+    return "ll_p_" + _h.new(KEY_SECRET, email.lower().strip().encode(), _hs.sha256).hexdigest()[:32]
+
+def generate_free_key(email: str) -> str:
+    import hmac as _h, hashlib as _hs
+    return "ll_f_" + _h.new(KEY_SECRET, ("free:"+email.lower().strip()).encode(), _hs.sha256).hexdigest()[:32]
+
+def _store_key(email, api_key, sale_id, product):
+    if not DATABASE_URL: return
+    try:
+        import psycopg2
+        conn=psycopg2.connect(DATABASE_URL); cur=conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS legis_link_keys (id SERIAL PRIMARY KEY,email VARCHAR(255) UNIQUE NOT NULL,api_key VARCHAR(50),sale_id VARCHAR(100),product VARCHAR(100),active BOOLEAN DEFAULT TRUE,created_at TIMESTAMPTZ DEFAULT NOW())")
+        cur.execute("INSERT INTO legis_link_keys (email,api_key,sale_id,product) VALUES (%s,%s,%s,%s) ON CONFLICT (email) DO UPDATE SET api_key=EXCLUDED.api_key,sale_id=EXCLUDED.sale_id,active=TRUE",(email.lower().strip(),api_key,sale_id,product))
+        conn.commit(); conn.close()
+    except Exception as e: logging.warning(f"Key store: {e}")
+
+def _revoke_key(email):
+    if not DATABASE_URL: return
+    try:
+        import psycopg2
+        conn=psycopg2.connect(DATABASE_URL); cur=conn.cursor()
+        cur.execute("UPDATE legis_link_keys SET active=FALSE WHERE email=%s",(email.lower().strip(),))
+        conn.commit(); conn.close()
+    except Exception as e: logging.warning(f"Key revoke: {e}")
+
+def _notify_sale(email, api_key, product, sale_id):
+    token="8587526488:AAEqwKpuFHrC3F_by9LjKDQLt4xvZpi1QoA"; chat="2119918902"
+    try:
+        import httpx as _hx
+        _hx.post(f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id":chat,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
+    except: pass
 VERSION           = "3.2.1"
 # ── Page content (embedded — no filesystem dependency) ────────────────────
 _PAGES = {
@@ -796,6 +832,29 @@ def run_http():
                 await server.run(streams[0], streams[1],
                                  server.create_initialization_options())
 
+        async def handle_gumroad_webhook(request):
+            """Gumroad webhook. Set Ping URL in Gumroad Settings > Advanced."""
+            try: body = await request.json()
+            except:
+                form = await request.form(); body = dict(form)
+            email = str(body.get("email","")).strip()
+            if not email: return JSONResponse({"error":"no email"},status_code=400)
+            if body.get("refunded"): _revoke_key(email); return JSONResponse({"status":"revoked"})
+            key = generate_pro_key(email)
+            _store_key(email, key, str(body.get("sale_id","")), str(body.get("product_name","")))
+            _notify_sale(email, key, str(body.get("product_name","")), str(body.get("sale_id","")))
+            audit_log(email[:20],"pro","webhook_sale","","","KEY_ISSUED")
+            return JSONResponse({"status":"ok","email":email,"tier":"pro"})
+
+        async def handle_key_lookup(request):
+            """Admin key lookup. GET /key/lookup?email=x&secret=ADMIN_SECRET"""
+            secret = os.environ.get("LEGIS_ADMIN_SECRET","")
+            if not secret or request.query_params.get("secret","") != secret:
+                return JSONResponse({"error":"Unauthorized"},status_code=401)
+            email = request.query_params.get("email","").strip()
+            if not email: return JSONResponse({"error":"email required"},status_code=400)
+            return JSONResponse({"email":email,"pro_key":generate_pro_key(email),"free_key":generate_free_key(email)})
+
         async def handle_landing(request):
             """Landing page for ads and direct traffic."""
             from starlette.responses import HTMLResponse
@@ -1022,6 +1081,8 @@ def run_http():
 
         starlette_app = Starlette(routes=[
             Route("/",              handle_landing),
+            Route("/webhook/gumroad", handle_gumroad_webhook, methods=["POST"]),
+            Route("/key/lookup",      handle_key_lookup,      methods=["GET"]),
             Route("/health",        handle_health),
             Route("/test",          handle_test),
             Route("/roadmap",       handle_roadmap),
