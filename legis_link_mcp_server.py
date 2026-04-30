@@ -1001,8 +1001,42 @@ def run_http():
                 "generate_rams":              "rams",
                 "verify_material_compliance": "material",
                 "get_inspection_requirements":"inspection",
+                "visual_compliance":          "visual",
             }
             prompt_key = prompt_map.get(tool, "compliance")
+
+            # ── Image / visual compliance ──────────────────────────────────
+            image_b64  = body.get("image", "") or ""
+            media_type = body.get("media_type", "image/jpeg") or "image/jpeg"
+            has_image  = len(image_b64) > 100
+
+            if has_image:
+                if tier != "pro":
+                    return JSONResponse({
+                        "error": "Visual compliance requires Pro. Upgrade at https://rickyfarmer.gumroad.com/l/Legis-LinkPro",
+                        "upgrade": PRO_UPGRADE
+                    }, status_code=403)
+                tool = "visual_compliance"
+                user_msg = (f"Trade: {trade} | Region: {region} | Role: {role}\n"
+                           f"Question: {question or 'Is this installation compliant?'}")
+                result = await ask_claude_vision(
+                    SYSTEM_PROMPTS["visual"], user_msg, image_b64, media_type
+                )
+                disclaimer = ("<br><br><em style='color:#94a3b8;font-size:11px'>"
+                              "Preliminary visual check only — not a certified inspection."
+                              "</em>")
+                result["result"] = str(result.get("result","")) + disclaimer
+                audit_log(api_key, tier, "visual_compliance", trade, region,
+                          result.get("status","OK"))
+                return JSONResponse({
+                    "status":         result.get("status","INFO"),
+                    "result":         result.get("result",""),
+                    "code_reference": result.get("code_reference",""),
+                    "trade":          trade,
+                    "region":         region,
+                    "tool":           "visual_compliance",
+                    "remaining":      rate["remaining"],
+                })
             # Build tool-specific user message
             if tool == "generate_rams":
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nGenerate a full RAMS document for this task: {question}"
