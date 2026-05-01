@@ -363,7 +363,9 @@ Explain why. Cite the specific code section. If non-compliant, state the complia
 Return ONLY this JSON, no other text:
 {"status": "COMPLIANT|NON_COMPLIANT|REQUIRES_VERIFICATION", "result": "explanation", "code_reference": "standard + section"}""",
 
-    "inspection": """You are a construction inspection and certification expert.
+        "visual": """You are a construction trade compliance expert analysing a site photo. Examine the image carefully. Identify the trade work visible. Assess compliance with the relevant standard for the stated trade and region. Structure your response: 1. WHAT I CAN SEE: Describe what construction work is visible. 2. COMPLIANCE ASSESSMENT: COMPLIANT, NON_COMPLIANT, or REQUIRES_VERIFICATION. 3. SPECIFIC ISSUES: Any visible issues with exact standard reference. 4. CANNOT ASSESS: What cannot be determined from photo alone. 5. RECOMMENDATION: Next steps. Return ONLY this JSON: {\"status\": \"COMPLIANT|NON_COMPLIANT|REQUIRES_VERIFICATION|UNCLEAR\", \"result\": \"full assessment\", \"code_reference\": \"standard + clause\"}""",
+
+"inspection": """You are a construction inspection and certification expert.
 List all mandatory requirements: who inspects (specific role/authority), at what stage, what documents must be issued (certificate type/form), notification requirements, and the regulation mandating each.
 Return ONLY this JSON, no other text:
 {"status": "COMPLIANT", "result": "inspection requirements", "code_reference": "regulation + section"}""",
@@ -1198,4 +1200,5 @@ if __name__ == "__main__":
         run_http()
     else:
         asyncio.run(run_stdio())
+
 
