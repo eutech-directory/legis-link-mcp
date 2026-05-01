@@ -365,6 +365,8 @@ Return ONLY this JSON, no other text:
 
         "visual": """You are a construction trade compliance expert analysing a site photo. Examine the image carefully. Identify the trade work visible. Assess compliance with the relevant standard for the stated trade and region. Structure your response: 1. WHAT I CAN SEE: Describe what construction work is visible. 2. COMPLIANCE ASSESSMENT: COMPLIANT, NON_COMPLIANT, or REQUIRES_VERIFICATION. 3. SPECIFIC ISSUES: Any visible issues with exact standard reference. 4. CANNOT ASSESS: What cannot be determined from photo alone. 5. RECOMMENDATION: Next steps. Return ONLY this JSON: {\"status\": \"COMPLIANT|NON_COMPLIANT|REQUIRES_VERIFICATION|UNCLEAR\", \"result\": \"full assessment\", \"code_reference\": \"standard + clause\"}""",
 
+    "visual": """You are a construction trade compliance expert analysing a site photo. Examine the image carefully. Identify the trade work visible. Assess compliance with the relevant standard for the stated trade and region. Structure your response: 1. WHAT I CAN SEE: Describe what construction work is visible. 2. COMPLIANCE ASSESSMENT: COMPLIANT, NON_COMPLIANT, or REQUIRES_VERIFICATION. 3. SPECIFIC ISSUES: Any visible issues with exact standard reference. 4. CANNOT ASSESS: What cannot be determined from photo alone. 5. RECOMMENDATION: Next steps. Return ONLY this JSON: {\"status\": \"COMPLIANT|NON_COMPLIANT|REQUIRES_VERIFICATION|UNCLEAR\", \"result\": \"full assessment\", \"code_reference\": \"standard + clause\"}""",
+
 "inspection": """You are a construction inspection and certification expert.
 List all mandatory requirements: who inspects (specific role/authority), at what stage, what documents must be issued (certificate type/form), notification requirements, and the regulation mandating each.
 Return ONLY this JSON, no other text:
@@ -864,6 +866,71 @@ async def ask_claude_vision(system_prompt: str, user_message: str,
             return {"status": "ERROR", "result": str(e), "code_reference": ""}
 
 
+async def ask_claude_vision(system_prompt: str, user_message: str,
+                            image_b64: str, media_type: str = "image/jpeg") -> dict:
+    """Call Claude vision API. Falls back to OpenAI GPT-4o vision on billing errors."""
+    if len(image_b64) > 1_400_000:
+        return {"status": "ERROR", "result": "Image too large. Resize under 1MB.", "code_reference": ""}
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            resp = await client.post(
+                ANTHROPIC_URL,
+                headers={"x-api-key": ANTHROPIC_API_KEY,
+                         "anthropic-version": "2023-06-01",
+                         "content-type": "application/json"},
+                json={"model": MODEL, "max_tokens": 2048,
+                      "system": system_prompt,
+                      "messages": [{"role": "user", "content": [
+                          {"type": "image", "source": {
+                              "type": "base64",
+                              "media_type": media_type,
+                              "data": image_b64}},
+                          {"type": "text", "text": user_message}
+                      ]}]}
+            )
+            if resp.status_code == 200:
+                return _parse_llm_text(resp.json()["content"][0]["text"])
+            error_body = resp.text
+            # Billing error — fall back to OpenAI GPT-4o vision
+            if resp.status_code in (400, 402) and "credit balance" in error_body:
+                logging.warning("Anthropic credits exhausted — falling back to OpenAI vision")
+                return await _ask_openai_vision(system_prompt, user_message, image_b64, media_type)
+            return {"status": "ERROR", "result": f"API error {resp.status_code}", "code_reference": ""}
+        except Exception as e:
+            return {"status": "ERROR", "result": str(e), "code_reference": ""}
+
+
+async def _ask_openai_vision(system_prompt: str, user_message: str,
+                             image_b64: str, media_type: str = "image/jpeg") -> dict:
+    """Fallback vision using OpenAI GPT-4o-mini vision."""
+    if not OPENAI_API_KEY:
+        return {"status": "ERROR", "result": "No fallback available.", "code_reference": ""}
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            resp = await client.post(
+                OPENAI_URL,
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
+                         "Content-Type": "application/json"},
+                json={"model": "gpt-4o-mini",
+                      "max_tokens": 2048,
+                      "messages": [
+                          {"role": "system", "content": system_prompt},
+                          {"role": "user", "content": [
+                              {"type": "image_url", "image_url": {
+                                  "url": f"data:{media_type};base64,{image_b64}",
+                                  "detail": "high"}},
+                              {"type": "text", "text": user_message}
+                          ]}
+                      ]}
+            )
+            if resp.status_code == 200:
+                raw = resp.json()["choices"][0]["message"]["content"]
+                return _parse_llm_text(raw)
+            return {"status": "ERROR", "result": f"OpenAI error {resp.status_code}", "code_reference": ""}
+        except Exception as e:
+            return {"status": "ERROR", "result": str(e), "code_reference": ""}
+
+
 def run_http():
     try:
         from mcp.server.sse import SseServerTransport
@@ -1218,4 +1285,5 @@ if __name__ == "__main__":
         run_http()
     else:
         asyncio.run(run_stdio())
+
 
