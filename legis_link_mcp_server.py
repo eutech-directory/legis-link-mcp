@@ -1,4 +1,4 @@
-﻿"""
+"""
 Legis-Link MCP Server v3.2.1
 =============================
 Claude-direct engine with production foundations:
