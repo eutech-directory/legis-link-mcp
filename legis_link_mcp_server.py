@@ -917,6 +917,35 @@ def get_daily_toolbox(trade: str) -> dict:
     return topic
 
 
+async def ask_claude_vision(system_prompt: str, user_message: str,
+                            image_b64: str, media_type: str = "image/jpeg") -> dict:
+    """Call Claude vision API with image for visual compliance checking."""
+    if len(image_b64) > 1_400_000:
+        return {"status": "ERROR", "result": "Image too large. Resize under 1MB.", "code_reference": ""}
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            resp = await client.post(
+                ANTHROPIC_URL,
+                headers={"x-api-key": ANTHROPIC_API_KEY,
+                         "anthropic-version": "2023-06-01",
+                         "content-type": "application/json"},
+                json={"model": MODEL, "max_tokens": 2048,
+                      "system": system_prompt,
+                      "messages": [{"role": "user", "content": [
+                          {"type": "image", "source": {
+                              "type": "base64",
+                              "media_type": media_type,
+                              "data": image_b64}},
+                          {"type": "text", "text": user_message}
+                      ]}]}
+            )
+            if resp.status_code == 200:
+                return _parse_llm_text(resp.json()["content"][0]["text"])
+            return {"status": "ERROR", "result": f"API error {resp.status_code}", "code_reference": ""}
+        except Exception as e:
+            return {"status": "ERROR", "result": str(e), "code_reference": ""}
+
+
 def run_http():
     try:
         from mcp.server.sse import SseServerTransport
