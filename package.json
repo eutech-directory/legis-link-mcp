@@ -1,0 +1,46 @@
+{
+  "name": "legis-link-mcp",
+  "version": "3.2.4",
+  "description": "Construction compliance AI — 9 tools, 87 regions, 10 trades. Instant code answers on mobile. Free tier available. AU (AS/NZS 3000) · UK (BS 7671) · USA all 50 states (NEC NFPA 70) · Canada · EU.",
+  "main": "legis_link_mcp_server.py",
+  "scripts": {
+    "start": "python legis_link_mcp_server.py",
+    "test": "echo \"See https://legis-link-mcp-production-3e9b.up.railway.app/health\""
+  },
+  "keywords": [
+    "mcp",
+    "construction",
+    "compliance",
+    "electrical",
+    "plumbing",
+    "HVAC",
+    "AS/NZS3000",
+    "BS7671",
+    "NEC",
+    "NFPA70",
+    "RAMS",
+    "safety",
+    "toolbox",
+    "cable-sizing",
+    "building-code",
+    "AI",
+    "claude",
+    "model-context-protocol"
+  ],
+  "author": "Ricky Farmer <ricky.farmerai@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eutech-directory/legis-link-mcp.git"
+  },
+  "homepage": "https://legis-link-mcp-production-3e9b.up.railway.app",
+  "bugs": {
+    "url": "https://github.com/eutech-directory/legis-link-mcp/issues"
+  },
+  "engines": {
+    "python": ">=3.11"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

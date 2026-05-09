@@ -106,6 +106,18 @@ def _revoke_key(email):
         conn.commit(); conn.close()
     except Exception as e: logging.warning(f"Key revoke: {e}")
 
+def _log_milestone(type_, desc):
+    """Log a milestone to NANO memory ? called on sales and traffic events."""
+    import subprocess, sys
+    try:
+        subprocess.Popen([
+            sys.executable,
+            r"C:\Users\USER\.nanobot\skills\nano_milestone_logger.py",
+            "--log", type_, desc
+        ], creationflags=0x08000000)  # CREATE_NO_WINDOW
+    except Exception:
+        pass
+
 def _notify_sale(email, api_key, product, sale_id):
     token="8587526488:AAEqwKpuFHrC3F_by9LjKDQLt4xvZpi1QoA"; chat="2119918902"
     try:
@@ -953,6 +965,7 @@ def run_http():
             key = generate_pro_key(email)
             _store_key(email, key, str(body.get("sale_id","")), str(body.get("product_name","")))
             _notify_sale(email, key, str(body.get("product_name","")), str(body.get("sale_id","")))
+            _log_milestone("sale", f"Legis-Link Pro sale ? {email} ? sale_id {str(body.get('sale_id',''))}")
             audit_log(email[:20],"pro","webhook_sale","","","KEY_ISSUED")
             return JSONResponse({"status":"ok","email":email,"tier":"pro"})
 
