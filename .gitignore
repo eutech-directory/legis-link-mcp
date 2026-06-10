@@ -1,0 +1,7 @@
+
+patch_*.py
+
+patch_*.py
+fix_*.py
+*.bak.*
+__pycache__/
