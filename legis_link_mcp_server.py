@@ -960,6 +960,10 @@ async def ask_claude_vision(system_prompt: str, user_message: str,
             return {"status": "ERROR", "result": f"API error {resp.status_code}", "code_reference": ""}
         except Exception as e:
             return {"status": "ERROR", "result": str(e), "code_reference": ""}
+
+
+
+
 def check_free_tier_server(fingerprint, ip):
     FREE_DAILY = 50
     fp = (fingerprint or ("ip_" + (ip or "unknown")))[:200]
@@ -998,10 +1002,6 @@ def increment_free_tier(fingerprint, ip):
         pass
 
 
-
-
-
-
 async def handle_fingerprint(request):
     try:
         data = await request.json()
@@ -1016,7 +1016,6 @@ async def handle_fingerprint(request):
     except Exception:
         from starlette.responses import JSONResponse as _JR
         return _JR({"allowed": True, "remaining": 50, "used": 0})
-
 def run_http():
     try:
         from mcp.server.sse import SseServerTransport
@@ -1508,6 +1507,12 @@ def run_http():
                 except Exception:
                     pass
 
+            if not api_key or api_key == "dev_local":
+                _fp2 = body.get("fingerprint", "") if body else ""
+                _ip2 = request.headers.get("x-forwarded-for", "")
+                if not _ip2 and hasattr(request, "client") and request.client:
+                    _ip2 = request.client.host
+                increment_free_tier(_fp2, _ip2)
             return JSONResponse({
                 "status":         result.get("status", "INFO"),
                 "result":         result_text,
@@ -1561,5 +1566,6 @@ if __name__ == "__main__":
         run_http()
     else:
         asyncio.run(run_stdio())
+
 
 
