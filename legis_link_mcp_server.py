@@ -165,23 +165,7 @@ def validate_api_key(key: str | None) -> dict:
     """Validate API key. Returns {valid, tier, reason}."""
     if not key:
         # No key = free tier, 50 queries/day
-        
-        # Server-side rate limit check
-        try:
-            _fp = body.get("fingerprint", "") if isinstance(locals().get("body"), dict) else ""
-        except Exception:
-            _fp = ""
-        _ip = request.headers.get("x-forwarded-for", "") if hasattr(request, "headers") else ""
-        if not _ip and hasattr(request, "client") and request.client:
-            _ip = request.client.host
-        if _ip and "," in _ip: _ip = _ip.split(",")[0].strip()
-        _rl = check_free_tier_server(_fp, _ip)
-        if not _rl["allowed"]:
-            from starlette.responses import JSONResponse as _JR
-            return _JR({"error": "Free tier limit reached (50/day). Upgrade to Pro for 1,000/day.",
-                        "upgrade_url": "https://rickyfarmer.gumroad.com/l/Legis-LinkPro",
-                        "remaining": 0}, status_code=429)
-        return {"valid": True, "tier": "free", "reason": "free", "remaining": _rl["remaining"]}
+        return {"valid": True, "tier": "free", "reason": "free", "remaining": 50}
     k = key.strip()
     if k == "dev_local":
         return {"valid": True, "tier": "pro"}
@@ -1566,6 +1550,8 @@ if __name__ == "__main__":
         run_http()
     else:
         asyncio.run(run_stdio())
+
+
 
 
 
