@@ -1,4 +1,4 @@
-"""
+﻿"""
 Legis-Link MCP Server v3.2.1
 =============================
 Claude-direct engine with production foundations:
@@ -960,8 +960,62 @@ async def ask_claude_vision(system_prompt: str, user_message: str,
             return {"status": "ERROR", "result": f"API error {resp.status_code}", "code_reference": ""}
         except Exception as e:
             return {"status": "ERROR", "result": str(e), "code_reference": ""}
+def check_free_tier_server(fingerprint, ip):
+    FREE_DAILY = 50
+    fp = (fingerprint or ("ip_" + (ip or "unknown")))[:200]
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO legis_link_free_usage (fingerprint, ip_address, date_utc, query_count) "
+                    "VALUES (%s, %s, CURRENT_DATE, 0) "
+                    "ON CONFLICT (fingerprint, date_utc) DO UPDATE "
+                    "SET ip_address=EXCLUDED.ip_address, last_seen=NOW() "
+                    "RETURNING query_count",
+                    (fp, (ip or "unknown")[:50])
+                )
+                row = cur.fetchone()
+                used = row[0] if row else 0
+            conn.commit()
+        return {"allowed": used < FREE_DAILY, "remaining": max(0, FREE_DAILY - used), "used": used}
+    except Exception as e:
+        import logging; logging.getLogger("legis").warning("Rate limit DB error: %s", e)
+        return {"allowed": True, "remaining": 50, "used": 0}
 
 
+def increment_free_tier(fingerprint, ip):
+    fp = (fingerprint or ("ip_" + (ip or "unknown")))[:200]
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE legis_link_free_usage SET query_count=query_count+1, last_seen=NOW() "
+                    "WHERE fingerprint=%s AND date_utc=CURRENT_DATE",
+                    (fp,)
+                )
+            conn.commit()
+    except Exception:
+        pass
+
+
+
+
+
+
+async def handle_fingerprint(request):
+    try:
+        data = await request.json()
+        fp = data.get("fingerprint", "")
+        ip = request.headers.get("x-forwarded-for", "")
+        if not ip and hasattr(request, "client") and request.client:
+            ip = request.client.host
+        if ip and "," in ip:
+            ip = ip.split(",")[0].strip()
+        from starlette.responses import JSONResponse as _JR
+        return _JR(check_free_tier_server(fp, ip))
+    except Exception:
+        from starlette.responses import JSONResponse as _JR
+        return _JR({"allowed": True, "remaining": 50, "used": 0})
 
 def run_http():
     try:
@@ -1479,6 +1533,7 @@ def run_http():
             Route("/connect",       handle_connect_page),
             Route("/manifest.json", handle_manifest),
             Route("/sw.js",         handle_sw),
+            Route("/api/fingerprint", handle_fingerprint, methods=["POST"]),
             Route("/api/query",     handle_api_query, methods=["POST"]),
             Route("/.well-known/mcp/server-card.json", handle_server_card),
             Mount("/sse", app=sse.handle_post_message),
@@ -1506,3 +1561,5 @@ if __name__ == "__main__":
         run_http()
     else:
         asyncio.run(run_stdio())
+
+
