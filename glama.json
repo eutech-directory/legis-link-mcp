@@ -1,1 +1,9 @@
-﻿{"$schema":"https://glama.ai/mcp/schemas/server.json","maintainers":["eutech-directory"]}
+﻿{
+  "name": "Legis-Link MCP",
+  "description": "Construction compliance AI for UK, AU, EU, US and CA. Generates RAMS, method statements, toolbox talks, safety checklists and technical calculations. CDM 2015 + Building Safety Act 2022.",
+  "version": "3.2.4",
+  "license": "MIT",
+  "homepage": "https://legis-link-mcp-production-3e9b.up.railway.app",
+  "categories": ["legal-and-compliance", "developer-tools"],
+  "keywords": ["RAMS", "CDM 2015", "construction", "compliance", "safety", "toolbox talk", "UK", "Australia"]
+}
