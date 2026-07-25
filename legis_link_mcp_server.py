@@ -1,4 +1,4 @@
-﻿"""
+"""
 Legis-Link MCP Server v3.2.1
 =============================
 Claude-direct engine with production foundations:
@@ -907,14 +907,89 @@ TOOLBOX_TOPICS = {
     ],
 }
 
+# Map a jurisdiction (state/country) to its standards framework label.
+def _region_framework(region: str) -> str:
+    r = (region or "").strip()
+    au = {"NSW","VIC","QLD","WA","SA","ACT","TAS","NT","Australia"}
+    uk = {"England","Scotland","Wales","Northern Ireland","UK","United Kingdom"}
+    us_hint = {"USA","US","United States"}
+    ca = {"Ontario","Quebec","British Columbia","Alberta","Canada"}
+    if r in au: return "Australia (AS/NZS standards, WHS Acts, NCC)"
+    if r in uk: return "United Kingdom (BS 7671 / IET Wiring Regs, CDM 2015, HSE, Building Regs)"
+    if r in ca: return "Canada (CSA standards, provincial OH&S, National codes)"
+    if r in us_hint or _region_in_country(r, "USA"): return "United States (NEC/NFPA 70, OSHA 1926, IBC)"
+    if _region_in_country(r, "USA"): return "United States (NEC/NFPA 70, OSHA 1926, IBC)"
+    # EU member states -> EU/EN framework
+    return f"{r} (local/EN/IEC standards — verify against national code)"
+
+def _region_in_country(region: str, country: str) -> bool:
+    try:
+        return region in VALID_REGIONS.get(country, [])
+    except Exception:
+        return False
+
+_TOOLBOX_CACHE = {}
+
+async def _localize_topic(topic: dict, trade: str, region: str) -> dict:
+    """Rewrite a topic's region-specific references for the given jurisdiction.
+    Subject stays the same; standards/citations/control wording localized.
+    Cached per trade+region+day. AU topics for an AU region pass through."""
+    if not region or _region_in_country(region, "Australia") or region == "Australia":
+        return topic  # source content is already AU-native
+    key = (trade, region, _dt.date.today().isoformat(), topic.get("title",""))
+    if key in _TOOLBOX_CACHE:
+        return _TOOLBOX_CACHE[key]
+    framework = _region_framework(region)
+    system = (
+        "You localize construction toolbox-talk safety content to a specific "
+        "jurisdiction's standards. Keep the SUBJECT and structure identical. "
+        "Rewrite ONLY the code references, standard numbers, and any control "
+        "text that cites a specific standard, so they match the target "
+        "jurisdiction's framework. Do NOT invent precise clause numbers you are "
+        "not confident about — where unsure, name the correct governing standard "
+        "and say the specific clause must be verified. Return STRICT JSON with the "
+        "same keys as the input (title, objective, hazards[risk,text,ctrl], "
+        "checklist, discussion, ref). Append to 'ref' the note "
+        "'— verify against current local edition'."
+    )
+    import json as _json
+    user = (f"Jurisdiction: {region} — {framework}\nTrade: {trade}\n\n"
+            f"Localize this topic:\n{_json.dumps(topic, ensure_ascii=False)}")
+    try:
+        result = await ask_claude(system, user)
+        txt = result.get("result") if isinstance(result, dict) else None
+        if txt:
+            s = txt.strip()
+            if s.startswith("```"):
+                import re as _re
+                s = _re.sub(r"```json|```", "", s).strip()
+            loc = _json.loads(s)
+            if isinstance(loc, dict) and loc.get("hazards"):
+                _TOOLBOX_CACHE[key] = loc
+                return loc
+    except Exception:
+        pass
+    # safe fallback: keep subject, flag the reference as non-local
+    safe = dict(topic)
+    safe["ref"] = (topic.get("ref","") +
+                   f"  [Source standard is Australian — {region} equivalent applies; verify against local code]")
+    _TOOLBOX_CACHE[key] = safe
+    return safe
+
 def get_daily_toolbox(trade: str) -> dict:
-    """Get today's toolbox topic for a given trade."""
+    """Get today's toolbox topic for a given trade (region-neutral subject)."""
     topics = TOOLBOX_TOPICS.get(trade, [])
     if not topics:
         return {}
     day_num = _dt.date.today().timetuple().tm_yday
-    topic = topics[day_num % len(topics)]
-    return topic
+    return topics[day_num % len(topics)]
+
+async def get_daily_toolbox_localized(trade: str, region: str) -> dict:
+    """Region-aware daily topic: universal subject, localized references."""
+    topic = get_daily_toolbox(trade)
+    if not topic:
+        return {}
+    return await _localize_topic(topic, trade, region)
 
 
 async def ask_claude_vision(system_prompt: str, user_message: str,
@@ -1044,7 +1119,11 @@ def run_http():
         async def handle_toolbox(request):
             """Daily toolbox talk — free tier preview."""
             trade  = request.query_params.get("trade", "Electrical")
-            topic  = get_daily_toolbox(trade)
+            region = request.query_params.get("region", "").strip()
+            if region:
+                topic = await get_daily_toolbox_localized(trade, region)
+            else:
+                topic = get_daily_toolbox(trade)
             if not topic:
                 return JSONResponse({"error": f"No toolbox topic for trade: {trade}"}, status_code=404)
             return JSONResponse({
@@ -1069,8 +1148,11 @@ def run_http():
             if not auth["valid"] or auth["tier"] != "pro":
                 return JSONResponse({"error": "Pro required", "upgrade": PRO_UPGRADE}, status_code=403)
             trade  = request.query_params.get("trade", "Electrical")
-            region = request.query_params.get("region", "NSW")
-            topic  = get_daily_toolbox(trade)
+            region = request.query_params.get("region", "").strip()
+            if region:
+                topic = await get_daily_toolbox_localized(trade, region)
+            else:
+                topic = get_daily_toolbox(trade)
             if not topic:
                 return JSONResponse({"error": f"No topic for {trade}"}, status_code=404)
             try:
