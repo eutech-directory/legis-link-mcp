@@ -957,16 +957,27 @@ async def _localize_topic(topic: dict, trade: str, region: str) -> dict:
             f"Localize this topic:\n{_json.dumps(topic, ensure_ascii=False)}")
     try:
         result = await ask_claude(system, user)
-        txt = result.get("result") if isinstance(result, dict) else None
-        if txt:
-            s = txt.strip()
-            if s.startswith("```"):
-                import re as _re
-                s = _re.sub(r"```json|```", "", s).strip()
-            loc = _json.loads(s)
-            if isinstance(loc, dict) and loc.get("hazards"):
-                _TOOLBOX_CACHE[key] = loc
-                return loc
+        # ask_claude -> _parse_llm_text returns the PARSED dict directly. For a
+        # localized topic that dict IS the topic (has hazards/ref). Only the
+        # wrapped {status,result,...} shape carries text under "result".
+        loc = None
+        if isinstance(result, dict):
+            if result.get("hazards") and result.get("ref"):
+                loc = result
+            elif isinstance(result.get("result"), str):
+                s = result["result"].strip()
+                if s.startswith("```"):
+                    import re as _re
+                    s = _re.sub(r"```json|```", "", s).strip()
+                try:
+                    loc = _json.loads(s)
+                except Exception:
+                    loc = None
+        if isinstance(loc, dict) and loc.get("hazards") and loc.get("ref"):
+            if "verify against" not in loc.get("ref", "").lower():
+                loc["ref"] = loc["ref"] + " — verify against current local edition"
+            _TOOLBOX_CACHE[key] = loc
+            return loc
     except Exception:
         pass
     # safe fallback: keep subject, flag the reference as non-local
