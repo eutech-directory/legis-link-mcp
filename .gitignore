@@ -5,3 +5,4 @@ patch_*.py
 fix_*.py
 *.bak.*
 __pycache__/
+node_modules/
