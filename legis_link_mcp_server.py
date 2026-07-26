@@ -1449,6 +1449,14 @@ def run_http():
 
             tier = auth["tier"]
 
+            # Pro-tier gate: block Pro tools for non-Pro keys (mirrors call_tool)
+            if is_pro_tool(tool) and tier != "pro":
+                return JSONResponse({
+                    "error": "This is a Pro feature. Upgrade to access it.",
+                    "tool": tool,
+                    "upgrade": PRO_UPGRADE
+                }, status_code=402)
+
             # Rate limit
             rate = check_rate_limit(api_key, tier)
             if not rate["allowed"]:
