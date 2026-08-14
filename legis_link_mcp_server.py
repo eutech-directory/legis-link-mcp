@@ -1360,8 +1360,7 @@ def run_http():
                 "version": VERSION, "engine": "claude-direct",
                 "tools": {"free": 3, "pro": 5, "total": 8},
                 "auth": "required",
-                "api_key_set": bool(key),
-                "api_key_prefix": key[:12] + "..." if len(key) > 12 else "MISSING"
+                "api_key_set": bool(key)
             })
 
         async def handle_test(request):
