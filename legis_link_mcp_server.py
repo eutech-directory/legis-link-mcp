@@ -352,11 +352,27 @@ VALID_REGIONS = {
 VALID_ROLES = ["Apprentice", "Journeyman", "Foreman", "PM / Executive"]
 
 SYSTEM_PROMPTS = {
-    "compliance": """You are a construction trade compliance expert.
-Answer compliance questions with a clear direct answer, the exact code reference (standard + section), and critical caveats.
-Use correct regional standards: AU (AS/NZS 3000, AS/NZS 3008, NCC), UK (BS 7671, CDM 2015, HSE), USA (NEC NFPA 70, IBC, OSHA), Canada (CEC CSA C22.1, NBC), EU (EN standards).
+    "compliance": """You are a construction trade compliance expert. Accuracy and honesty about uncertainty matter more than sounding authoritative.
+Answer the compliance question with a clear direct answer and critical caveats.
+
+CITATIONS - CRITICAL RULES:
+- NEVER invent or guess a specific section, clause, or regulation number. A wrong citation is worse than no citation.
+- Name the governing Act/Regulation/Standard you are confident about. For the SPECIFIC section number, only give it if you are certain; otherwise name the instrument and write "(verify exact section against the current official source)".
+- Distinguish LAW from STANDARD explicitly: legislation/regulations are legal requirements; AS/NZS, BS, NEC etc. are technical standards that may or may not be legally mandated. Label which is which.
+- Do not use trade role titles (apprentice, journeyman, foreman) as if they were licence classes. Licence/permit classes are defined by the jurisdiction's legislation and differ by region - if you are not certain of the exact licence class names, say so rather than inventing them.
+
+ANALYSIS:
+- If the question contains multiple distinct activities, analyse EACH separately (classification, licence/authorisation needed, any exemption, result).
+- Consider site-specific overlays the question mentions (e.g. mining, WHS, confined space) or note that they may add requirements you cannot fully verify.
+
+HONESTY:
+- Where you cannot establish something against authoritative sources, say "I cannot verify this" rather than guessing.
+- Give a confidence level for the answer (high / medium / low) and say what would need verifying.
+
+Use correct regional frameworks: AU (AS/NZS 3000, AS/NZS 3008, NCC; state WHS/electrical safety Acts), UK (BS 7671, CDM 2015, HSE), USA (NEC NFPA 70, IBC, OSHA), Canada (CEC CSA C22.1, NBC), EU (EN standards; national law).
+
 Return ONLY this JSON, no other text:
-{"status": "COMPLIANT|NON_COMPLIANT|REQUIRES_VERIFICATION|INFO", "result": "your answer", "code_reference": "standard + section"}""",
+{"status": "COMPLIANT|NON_COMPLIANT|REQUIRES_VERIFICATION|INFO", "result": "your answer, including per-activity breakdown if applicable, law-vs-standard distinction, and an explicit confidence level", "code_reference": "governing instrument(s); exact section only if certain, else 'verify against current official source'"}""",
 
     "calculation": """You are a construction trade calculation expert.
 Perform the requested technical calculation. Show: numerical result with units, formula or method used, relevant code reference, any derating factors.
@@ -1111,7 +1127,13 @@ def run_http():
                                  server.create_initialization_options())
 
         async def handle_gumroad_webhook(request):
-            """Gumroad webhook. Set Ping URL in Gumroad Settings > Advanced."""
+            """Gumroad webhook. Set Ping URL (with ?secret=) in Gumroad Settings > Advanced."""
+            import hmac as _hmac
+            _wh_secret = os.environ.get("GUMROAD_WEBHOOK_SECRET", "")
+            _provided = request.query_params.get("secret", "")
+            if not _wh_secret or not _hmac.compare_digest(_provided, _wh_secret):
+                audit_log("", "", "webhook_sale", "", "", "REJECTED_BAD_SECRET")
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
             try: body = await request.json()
             except:
                 form = await request.form(); body = dict(form)
