@@ -351,6 +351,106 @@ VALID_REGIONS = {
 }
 VALID_ROLES = ["Apprentice", "Journeyman", "Foreman", "PM / Executive"]
 
+# ─────────────────────────────────────────────────────────────────────────
+# LICENCE_REGISTRY: verified licensing data, injected as ground truth so the
+# model cites real instruments/regulators instead of recalling. Each row
+# confirmed against the official regulator, current as at 2026-08. Expand by
+# adding verified rows keyed (trade_lower, jurisdiction_upper).
+# ─────────────────────────────────────────────────────────────────────────
+LICENCE_REGISTRY = {
+    ("electrical", "QLD"): {
+        "law": "Electrical Safety Act 2002 (Qld) + Electrical Safety Regulation 2013, as amended (incl. Electrical Safety and Other Legislation Amendment Regulation 2024; ES Regulation current as at 1 Jan 2025 per QLD legislation register)",
+        "regulator": "WorkSafe Queensland / Electrical Safety Office",
+        "individual": "electrical mechanic (authorises all electrical work), electrical linesperson, electrical fitter, electrical jointer, restricted electrical work licence",
+        "trainee": "electrical work training permit",
+        "contractor": "electrical contractor licence (unrestricted or restricted)",
+        "url": "https://www.business.qld.gov.au/industries/service-industries-professionals/electricians",
+        "asat": "verified Aug 2026 against QLD legislation register + WorkSafe QLD (ES Reg 2013 current as at 1 Jan 2025)",
+    },
+    ("electrical", "NSW"): {
+        "law": "Home Building Act 1989 (NSW) + Electricity (Consumer Safety) Act 2004",
+        "regulator": "Building Commission NSW (formerly NSW Fair Trading)",
+        "individual": "Qualified Supervisor Certificate (Electrical), Electrician Tradesperson Certificate",
+        "trainee": "Provisional Tradesperson Certificate",
+        "contractor": "Electrical Contractor Licence (business entity)",
+        "url": "https://www.nsw.gov.au/departments-and-agencies/building-commission",
+        "asat": "verified Aug 2026 against NSW legislation register: Home Building Act 1989 No 147 current version 20 Aug 2024 to date (updated 28 Jan 2025)",
+    },
+    ("electrical", "VIC"): {
+        "law": "Electricity Safety Act 1998 (Vic) + Electricity Safety (Registration and Licensing) Regulations 2020",
+        "regulator": "Energy Safe Victoria (ESV)",
+        "individual": "Electrician's Licence (A Grade)",
+        "trainee": "Supervised Worker's Licence (L)",
+        "contractor": "Registered Electrical Contractor (REC)",
+        "url": "https://www.esv.vic.gov.au/licensing/electricians-licences/",
+        "asat": "verified Aug 2026 against legislation.vic.gov.au: Electricity Safety Act 1998 in-force version 088 from 1 Apr 2026 (+ Regs 2019/2020), per Energy Safe Victoria",
+    },
+    ("electrical", "WA"): {
+        "law": "Electricity (Licensing) Regulations 1991 (WA) (principal instrument, still current; assessment updated Apr 2026 to AS/NZS 3000:2025)",
+        "regulator": "Building and Energy / EnergySafety (DEMIRS)",
+        "individual": "Electrical Worker's Licence",
+        "trainee": "Electrician's Training Licence (apprentice)",
+        "contractor": "Electrical Contractor licence (EC prefix)",
+        "url": "https://www.wa.gov.au/organisation/service-delivery/electrical-licensing",
+        "asat": "verified Aug 2026 against wa.gov.au (Electricity (Licensing) Regs 1991 current; assessment updated Apr 2026)",
+    },
+    ("electrical", "SA"): {
+        "law": "Plumbers, Gas Fitters and Electricians Act 1995 (SA) + Regulations 2025",
+        "regulator": "Office of the Technical Regulator (technical) / Consumer and Business Services (licensing)",
+        "individual": "Electrical Worker's Registration (+ restricted variants)",
+        "trainee": "provisional/restricted registration (supervised, gap-training)",
+        "contractor": "Electrical Contractor's Licence",
+        "url": "https://www.sa.gov.au/topics/business-and-trade/licensing/building-and-trades/licensing",
+        "asat": "verified Aug 2026 against legislation.sa.gov.au: Plumbers, Gas Fitters and Electricians Regulations 2025 commenced 7 Aug 2025 (repealing 2010 regs); Act ss.6-7 (contractor licence), ss.13-14 (worker registration)",
+    },
+    ("electrical", "TAS"): {
+        "law": "Occupational Licensing Act 2005 (Tas) + Electrical Work Licence Classes Determination (current)",
+        "regulator": "Consumer, Building and Occupational Services (CBOS)",
+        "individual": "Electrical Practitioner Licence (electrician / cable jointer / line worker), restricted electrical work licence",
+        "trainee": "provisional electrical work licence",
+        "contractor": "Electrical Contractor's Licence",
+        "url": "https://www.cbos.tas.gov.au/topics/licensing-and-registration/licensed-occupations/electrical",
+        "asat": "verified Aug 2026 against CBOS (pages updated 20 Jul 2026; Electrical Work Licence Classes Determination current)",
+    },
+    ("electrical", "ACT"): {
+        "law": "Construction Occupations (Licensing) Act 2004 (ACT)",
+        "regulator": "Access Canberra (Construction Occupations Registrar)",
+        "individual": "Electrician's licence (unrestricted), restricted endorsements",
+        "trainee": "Unrestricted Permit Electrotechnology Systems",
+        "contractor": "Electrical Contractor licence",
+        "url": "https://www.accesscanberra.act.gov.au/",
+        "asat": "verified Aug 2026 against legislation.act.gov.au: Construction Occupations (Licensing) Act 2004 republished for amendment A2026-2; electrician defined s.11, licensed under Part 3, Registrar in Access Canberra",
+    },
+    ("electrical", "NT"): {
+        "law": "Electrical Safety Act 2022 (NT) + Electrical Safety Regulations 2024 (commenced 1 Jul 2024, replacing the Electrical Workers and Contractors Act 1978)",
+        "regulator": "Electrical Safety Regulator, NT WorkSafe",
+        "individual": "unrestricted electrical mechanic licence (+ endorsements), restricted electrical work licence",
+        "trainee": "training/supervised licence categories",
+        "contractor": "Electrical Contractor Licence",
+        "url": "https://worksafe.nt.gov.au/licensing-and-registration/electrical-licensing",
+        "asat": "verified Aug 2026 (Electrical Safety Act 2022 + Regs 2024 commenced 1 Jul 2024, replacing 1978 Act)",
+    },
+}
+
+def _registry_ground(trade: str, region: str) -> str:
+    """Return verified ground-truth facts for (trade, region), or '' if none."""
+    row = LICENCE_REGISTRY.get(((trade or "").strip().lower(), (region or "").strip().upper()))
+    if not row:
+        return ""
+    return (
+        "\n\nVERIFIED LICENSING DATA (authoritative — use these facts; do not contradict or invent alternatives):\n"
+        f"- Governing law: {row['law']}\n"
+        f"- Regulator: {row['regulator']}\n"
+        f"- Individual licence class(es): {row['individual']}\n"
+        f"- Apprentice/trainee pathway: {row['trainee']}\n"
+        f"- Contractor (business) licence: {row['contractor']}\n"
+        f"- Official source: {row['url']}\n"
+        f"- Verified current as at: {row['asat']}\n"
+        "Cite the governing law and regulator above. Do NOT use trade role titles as licence classes. "
+        "If the question needs a specific section number not given above, name the instrument and say to verify the exact section against the official source."
+    )
+
+
 SYSTEM_PROMPTS = {
     "compliance": """You are a construction trade compliance expert. Accuracy and honesty about uncertainty matter more than sounding authoritative.
 Answer the compliance question with a clear direct answer and critical caveats.
@@ -791,6 +891,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
     if name == "check_compliance":
         question = arguments.get("question", "")
         user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
+        user_msg += _registry_ground(trade, region)
         result   = await ask_claude(SYSTEM_PROMPTS["compliance"], user_msg)
         audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
         return [types.TextContent(type="text", text=format_response(
