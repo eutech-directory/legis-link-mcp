@@ -1679,6 +1679,9 @@ def run_http():
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nFor: {question}\nList ALL mandatory inspection hold points as a simple numbered list. For each stage include: stage name, who inspects, certificate issued, key regulation. Keep each item to 2-3 lines. Plain text, no JSON, no tables."
             else:
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
+            # Ground compliance answers with verified registry data (mirrors MCP path)
+            if tool == "check_compliance":
+                user_msg += _registry_ground(trade, region)
             result   = await ask_claude(SYSTEM_PROMPTS[prompt_key], user_msg)
             audit_log(api_key, tier, tool, trade, region, result.get("status","OK"))
 
