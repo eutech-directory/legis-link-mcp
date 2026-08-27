@@ -756,6 +756,67 @@ def _registry_ground(trade: str, region: str) -> str:
     )
 
 
+# --- Free-text AU jurisdiction detection --------------------------------------
+# Full names are matched case-insensitively; abbreviations are matched
+# case-SENSITIVELY (uppercase) so the verb "act" and lowercase "wa"/"sa"/"nt"
+# fragments do not misfire. Self-tested against verb/fragment false positives.
+_REGION_FULL = [
+    (r"\bqueensland\b", "QLD"),
+    (r"\bnew south wales\b", "NSW"),
+    (r"\bvictoria\b", "VIC"),
+    (r"\bwestern australia\b", "WA"),
+    (r"\bsouth australia\b", "SA"),
+    (r"\btasmania\b", "TAS"),
+    (r"\baustralian capital territory\b|\bcanberra\b", "ACT"),
+    (r"\bnorthern territory\b|\bdarwin\b", "NT"),
+]
+_REGION_ABBR = [
+    (r"\bQLD\b", "QLD"),
+    (r"\bNSW\b", "NSW"),
+    (r"\bVIC\b", "VIC"),
+    (r"\bWA\b", "WA"),
+    (r"\bSA\b", "SA"),
+    (r"\bTAS\b", "TAS"),
+    (r"\bACT\b", "ACT"),
+    (r"\bNT\b", "NT"),
+]
+
+def _detect_regions_in_text(text: str):
+    """Canonical AU region codes explicitly named in free text (de-duplicated).
+    Full names case-insensitive; abbreviations uppercase-only to avoid the
+    'act' verb and 'wa'/'sa'/'nt' word-fragment false positives."""
+    if not text:
+        return []
+    found = []
+    tl = text.lower()
+    for pat, code in _REGION_FULL:
+        if re.search(pat, tl) and code not in found:
+            found.append(code)
+    for pat, code in _REGION_ABBR:
+        if re.search(pat, text) and code not in found:  # original case, uppercase pattern
+            found.append(code)
+    return found
+
+def _registry_ground_multi(trade: str, selected_region: str, question_text: str = "") -> str:
+    """Ground the selected region PLUS any DIFFERENT jurisdiction the user named
+    in the question text, so the tool uses verified data for a typed jurisdiction
+    instead of hedging about it."""
+    out = _registry_ground(trade, selected_region)
+    sel = (selected_region or "").strip().upper()
+    extras = []
+    for code in _detect_regions_in_text(question_text):
+        if code == sel:
+            continue
+        g = _registry_ground(trade, code)
+        if g:
+            extras.append(
+                "\n\n[NOTE: your question mentions " + code + ", which differs from the "
+                "selected region " + (sel or "(none)") + ". Verified " + code + " data below - "
+                "answer for the jurisdiction the work is actually in:]" + g
+            )
+    return out + "".join(extras)
+
+
 # Shared anti-fabrication safety core, prepended to tool prompts so the whole
 # product (not just compliance) refuses to invent authoritative specifics.
 SAFETY_CORE = (
@@ -1228,7 +1289,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
     if name == "check_compliance":
         question = arguments.get("question", "")
         user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
-        user_msg += _registry_ground(trade, region)
+        user_msg += _registry_ground_multi(trade, region, question)
         result   = await ask_claude(SYSTEM_PROMPTS["compliance"], user_msg)
         audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
         return [types.TextContent(type="text", text=format_response(
@@ -1986,7 +2047,7 @@ def run_http():
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
             # Ground compliance answers with verified registry data (mirrors MCP path)
             if tool == "check_compliance":
-                user_msg += _registry_ground(trade, region)
+                user_msg += _registry_ground_multi(trade, region, question)
             result   = await ask_claude(SYSTEM_PROMPTS[prompt_key], user_msg)
             audit_log(api_key, tier, tool, trade, region, result.get("status","OK"))
 
