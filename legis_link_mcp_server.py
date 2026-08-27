@@ -689,6 +689,52 @@ LICENCE_REGISTRY = {
         "url": "https://www.vba.vic.gov.au/registration-and-licensing/building-practitioner-registration",
         "asat": "verified Aug 2026 from VBA/BPC official; VIC does NOT separately licence carpentry - builder-registration model, $10,000 threshold",
     },
+
+    ("carpentry", "WA"): {
+        "law": "Building Services (Registration) Act 2011 (WA)",
+        "regulator": "Building Services Board (Building and Energy / DEMIRS)",
+        "individual": "NO standalone carpenter licence in WA. A carpenter employed by a registered builder needs no licence. To contract on building work over $20,000, must register as a builder (Building Practitioner / Building Contractor)",
+        "trainee": "Apprentice/employee under a registered builder - no individual carpenter registration",
+        "contractor": "Building Contractor registration required to contract for building work over $20,000 (requiring a building permit)",
+        "url": "https://www.wa.gov.au/organisation/building-and-energy/building-and-energy-licensing",
+        "asat": "verified Aug 2026 from buildalife.wa.gov.au / wa.gov.au official; no standalone carpentry licence, builder registration over $20,000",
+    },
+    ("carpentry", "SA"): {
+        "law": "Building Work Contractors Act 1995 (SA) + Building Work Contractors Regulations 2026",
+        "regulator": "Consumer and Business Services (CBS)",
+        "individual": "NO distinct 'carpenter' class. Carpentry is 'specified building work'; to contract needs a Building Work Contractor's Licence ($10,000 net assets) OR a restricted subcontractor licence. Employed carpenter under a licensed contractor needs no own licence",
+        "trainee": "Apprentice/employee under a licensed building work contractor",
+        "contractor": "Building Work Contractor's Licence (or restricted subcontractor licence). From 10 Nov 2025 domestic work under $20,000 is 'minor' (no written contract/insurance) but worker must still be licensed. Penalties to $150k individual / $550k company",
+        "url": "https://www.sa.gov.au/topics/business-and-trade/licensing/building-and-trades/licensing",
+        "asat": "verified Aug 2026 from sa.gov.au / CBS official; carpentry = specified building work, no standalone carpenter class",
+    },
+    ("carpentry", "TAS"): {
+        "law": "Occupational Licensing Act 2005 + Occupational Licensing (Building Services Work) Determination + Regulations 2016",
+        "regulator": "Consumer, Building and Occupational Services (CBOS), Administrator of Occupational Licensing",
+        "individual": "NO standalone 'carpenter' occupation. TAS licenses Building Services Providers (occupation: builder). Carpentry is building services work performed under a builder / building services provider licence",
+        "trainee": "Apprentice/employee under a licensed building services provider",
+        "contractor": "Building Services Provider (builder) licence; contractor level. Same Occupational Licensing Act 2005 framework as TAS electrical/plumbing/gas",
+        "url": "https://www.cbos.tas.gov.au/topics/licensing-and-registration/licensed-occupations/building",
+        "asat": "verified Aug 2026 from CBOS official; carpentry under building services provider framework, no standalone carpenter occupation",
+    },
+    ("carpentry", "ACT"): {
+        "law": "Construction Occupations (Licensing) Act 2004 (ACT)",
+        "regulator": "Access Canberra (Construction Occupations Registrar)",
+        "individual": "NOT separately licensed. Per official ACT guidance, carpenters and bricklayers do NOT currently need a licence in the ACT. Qualification + construction induction card to work on site; work under a builder's construction occupations licence",
+        "trainee": "Apprentice/employee - no carpenter licence required",
+        "contractor": "Builder licence (classes A unlimited, B, C, D) needed to contract directly with an owner. ACT considering expanding licensing to carpentry/bricklaying but not yet in force",
+        "url": "https://www.planning.act.gov.au/build-buy-renovate/build-buy-or-renovate/getting-a-building-licence",
+        "asat": "verified Aug 2026 from planning.act.gov.au official; carpentry NOT a licensed occupation in ACT (work under builder's licence)",
+    },
+    ("carpentry", "NT"): {
+        "law": "Building Act 1993 (NT)",
+        "regulator": "Building Practitioners Board (BPB), established by Building Act 1993",
+        "individual": "NO specific carpentry licence in NT. Carpentry falls under building work; NT uses 'registration' not 'licensing'. Employed carpenter works under a registered building contractor",
+        "trainee": "Apprentice/employee under a registered building contractor",
+        "contractor": "Building Contractor registration required to contract for building work valued $12,000 or more. Work under $12,000, or reno/alteration with no floor-area/height increase, exempt",
+        "url": "https://bpb.nt.gov.au/",
+        "asat": "verified Aug 2026 from bpb.nt.gov.au / nt.gov.au official; no standalone carpentry licence, building contractor registration over $12,000",
+    },
 }
 
 def _registry_ground(trade: str, region: str) -> str:
