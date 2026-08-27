@@ -656,6 +656,39 @@ LICENCE_REGISTRY = {
         "url": "https://worksafe.nt.gov.au/",
         "asat": "verified Aug 2026 from ARC + Trades Recognition Australia; ARCtick RHL + NT restricted electrical",
     },
+
+    # ── BUILDING / CARPENTRY (PARTIAL: 3 of 8 verified - QLD, NSW, VIC) ──────
+    # NON-UNIFORM, threshold-based licensing (unlike safety-critical trades).
+    # Employed carpenters often work under an employer's/builder's licence.
+    # WA/SA/TAS/ACT/NT not yet verified to official-source standard - omitted
+    # rather than fabricated; the hardened prompt handles those honestly.
+    ("carpentry", "QLD"): {
+        "law": "Queensland Building and Construction Commission Act 1991 (QBCC Act)",
+        "regulator": "Queensland Building and Construction Commission (QBCC)",
+        "individual": "Carpentry trade contractor licence (trade contractor / nominee supervisor / site supervisor); Cert III Carpentry + QBCC managerial course. Builder licences: Low Rise (CPC40120), Medium Rise (CPC50220), Open (CPC60220)",
+        "trainee": "Apprentice; employed carpenter working under a licensed employer is covered by the employer's licence",
+        "contractor": "Licence required for building work over $3,300 (incl. labour+materials). Under $3,300, or employed under a licensed employer, may not need own licence",
+        "url": "https://www.qbcc.qld.gov.au/licences/apply-licence/available-licences/other-trade/carpentry",
+        "asat": "verified Aug 2026 from QBCC official; threshold $3,300; employee-under-licensed-employer exemption",
+    },
+    ("carpentry", "NSW"): {
+        "law": "Home Building Act 1989 (carpentry defined in Home Building Regulation 2014 Schedule 4)",
+        "regulator": "Building Commission NSW (formerly NSW Fair Trading)",
+        "individual": "Contractor Licence (contract in own right); Qualified Supervisor Certificate (supervise + perform, not contract); Tradesperson Certificate. Cert III Carpentry (CPC30220) + 2yrs experience",
+        "trainee": "Employee paid wages may do carpentry without own licence; apprentice",
+        "contractor": "Licence required for building/trade work over $5,000 (incl. labour+materials+GST). Unlicensed individuals limited to work <=$5,000. Fines $22,000 individual / $110,000 company",
+        "url": "https://www.nsw.gov.au/business-and-economy/licences-and-credentials/building-and-trade-licences-and-registrations/carpentry-work",
+        "asat": "verified Aug 2026 from nsw.gov.au official; threshold $5,000; carpentry per Home Building Reg 2014 Sch 4",
+    },
+    ("carpentry", "VIC"): {
+        "law": "Building Act 1993 + Building Regulations 2018",
+        "regulator": "Building and Plumbing Commission (BPC, formerly Victorian Building Authority)",
+        "individual": "NO standalone carpentry licence in VIC. VIC registers BUILDING PRACTITIONERS (7 categories incl. builder); an individual carpenter typically works under a registered building practitioner (head builder)",
+        "trainee": "Carpenter works as employee/sub-contractor under the registered head builder - no individual carpenter registration required",
+        "contractor": "Registration required for building work over $10,000; generally only the head contractor must be registered. Mandatory standalone carpenter registration proposed since 2019 but not implemented",
+        "url": "https://www.vba.vic.gov.au/registration-and-licensing/building-practitioner-registration",
+        "asat": "verified Aug 2026 from VBA/BPC official; VIC does NOT separately licence carpentry - builder-registration model, $10,000 threshold",
+    },
 }
 
 def _registry_ground(trade: str, region: str) -> str:
