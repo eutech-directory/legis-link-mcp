@@ -579,6 +579,83 @@ LICENCE_REGISTRY = {
         "url": "https://worksafe.nt.gov.au/licensing-and-registration/dangerous-goods/gasfitters",
         "asat": "verified Aug 2026 from NT WorkSafe official; gas under Dangerous Goods Regs (distinct from plumbing regulated by Plumbers & Drainers Board)",
     },
+
+    # ── REFRIGERATION / AIR-CONDITIONING x 8 AU (verified Aug 2026) ──────────
+    # TWO-LAYER TRADE: federal ARCtick RHL (national) + state restricted
+    # electrical licence for RAC (varies). Refrigerant handling and electrical
+    # work are SEPARATE authorisations - holding one does not authorise the other.
+    ("refrigeration", "QLD"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth, refrigerant) + Electrical Safety Act 2002 (Qld, electrical)",
+        "regulator": "ARC (refrigerant, national) + Electrical Safety Office/WorkSafe QLD (electrical) + QBCC (contractor licence over $3,300)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: Restricted Electrical Work Licence (refrigeration & air conditioning) from the QLD electrical regulator for the electrical component (disconnect/reconnect at terminals, fault-find, like-for-like replace). Full electrical work needs an electrical worker licence",
+        "trainee": "ARCtick trainee licence (supervised) + apprentice; Cert III Air Conditioning and Refrigeration (UEE32220)",
+        "contractor": "QBCC contractor licence for RAC work over $3,300; RTA for the business",
+        "url": "https://www.qbcc.qld.gov.au/news/refrigeration-air-conditioning-technicians-electrical-work",
+        "asat": "verified Aug 2026 from ARC + WorkSafe QLD official; two-layer (ARCtick + restricted electrical) confirmed",
+    },
+    ("refrigeration", "NSW"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth) + NSW electrical licensing law",
+        "regulator": "ARC (refrigerant) + Electrical Workers and Contractors Licensing Board / Building Commission NSW (electrical)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: Restricted Electrical Licence for the fixed wiring; electrical contractor issues a CCEW (Certificate of Compliance for Electrical Work). Both licences required - 'you need both to work'",
+        "trainee": "ARCtick trainee licence + Provisional Tradesperson Certificate (Building Commission NSW); Cert III Air Conditioning and Refrigeration (UEE32220)",
+        "contractor": "RTA (business) + electrical contractor licence",
+        "url": "https://www.nsw.gov.au/housing-and-construction/compliance-and-regulation",
+        "asat": "verified Aug 2026 from ARC + Trades Recognition Australia; NSW requires ARCtick RHL + restricted electrical licence",
+    },
+    ("refrigeration", "VIC"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth) + Building Act 1993 Part 12A (RAC regulated as plumbing in VIC)",
+        "regulator": "ARC (refrigerant) + Building and Plumbing Commission (BPC) (Refrigerated Air Conditioning plumbing class)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: register/licence in the Refrigerated Air Conditioning class with BPC + mechanical services plumbing qualification. NB: in VIC, RAC is regulated as a specialised class of PLUMBING",
+        "trainee": "ARCtick trainee + plumbing apprentice (mechanical services stream)",
+        "contractor": "Licensed mechanical services plumber (RAC class); RTA for business",
+        "url": "https://www.bpc.vic.gov.au/plumbers/plumber-classes-and-categories",
+        "asat": "verified Aug 2026 from ARC + BPC; VIC uniquely regulates RAC as a plumbing class (mechanical services) + ARCtick",
+    },
+    ("refrigeration", "WA"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth) + Electricity (Licensing) Regulations 1991 (WA electrical)",
+        "regulator": "ARC (refrigerant) + Building and Energy (DEMIRS) (electrical)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: restricted electrical worker's licence for the RAC electrical component from Building and Energy WA",
+        "trainee": "ARCtick trainee + electrical training licence; Cert III Air Conditioning and Refrigeration",
+        "contractor": "RTA (business) + electrical contractor where applicable",
+        "url": "https://www.wa.gov.au/organisation/building-and-energy",
+        "asat": "verified Aug 2026 from ARC + Trades Recognition Australia; ARCtick RHL + WA restricted electrical",
+    },
+    ("refrigeration", "SA"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth) + Plumbers, Gas Fitters and Electricians Act 1995 (SA electrical)",
+        "regulator": "ARC (refrigerant) + Consumer and Business Services / Office of the Technical Regulator (electrical)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: Restricted Electrical Worker Registration (under supervision). Both licences required to work (supervised) in SA as an air-conditioning and refrigeration mechanic",
+        "trainee": "ARCtick trainee + restricted electrical worker registration (supervised)",
+        "contractor": "RTA (business) + electrical contractors licence (s.7(c))",
+        "url": "https://www.sa.gov.au/topics/business-and-trade/licensing/building-and-trades/licensing",
+        "asat": "verified Aug 2026 from ARC + Trades Recognition Australia; SA requires ARCtick RHL + restricted electrical worker registration",
+    },
+    ("refrigeration", "TAS"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth) + Occupational Licensing Act 2005 (TAS electrical)",
+        "regulator": "ARC (refrigerant) + Consumer, Building and Occupational Services (CBOS) (electrical)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: restricted electrical practitioner licence for RAC from CBOS",
+        "trainee": "ARCtick trainee + electrical provisional; Cert III Air Conditioning and Refrigeration",
+        "contractor": "RTA (business) + electrical contractor where applicable",
+        "url": "https://www.cbos.tas.gov.au/topics/licensing-and-registration",
+        "asat": "verified Aug 2026 from ARC + Trades Recognition Australia; ARCtick RHL + TAS restricted electrical",
+    },
+    ("refrigeration", "ACT"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth) + Construction Occupations (Licensing) Act 2004 (ACT electrical)",
+        "regulator": "ARC (refrigerant) + Access Canberra (electrical)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: Restricted - Electrotechnology Systems Refrigeration and Air-conditioning Licence with Access Canberra",
+        "trainee": "ARCtick trainee + electrical apprentice; overseas OTSR -> Provisional Tradesperson Certificate (3yr, non-renewable)",
+        "contractor": "RTA (business) + electrical contractor where applicable",
+        "url": "https://www.planning.act.gov.au/professionals/regulation-and-responsibilities/construction-licences",
+        "asat": "verified Aug 2026 from ARC + Trades Recognition Australia; ARCtick RHL + ACT restricted electrotechnology RAC licence",
+    },
+    ("refrigeration", "NT"): {
+        "law": "Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 (Cwlth) + NT electrical licensing (Electrical Safety Act 2022)",
+        "regulator": "ARC (refrigerant) + NT electrical regulator (NT WorkSafe electrical licensing)",
+        "individual": "FEDERAL (all AU): ARCtick Refrigerant Handling Licence (RHL) from Australian Refrigeration Council under Ozone Protection and Synthetic Greenhouse Gas Management Act 1989 + Regs 1995 - required to handle refrigerant; business needs a Refrigerant Trading Authorisation (RTA). STATE: NT restricted electrical licence for the RAC electrical component",
+        "trainee": "ARCtick trainee licence (handling refrigerant in classroom/workplace) + electrical trainee",
+        "contractor": "RTA (business) + electrical contractor where applicable",
+        "url": "https://worksafe.nt.gov.au/",
+        "asat": "verified Aug 2026 from ARC + Trades Recognition Australia; ARCtick RHL + NT restricted electrical",
+    },
 }
 
 def _registry_ground(trade: str, region: str) -> str:
