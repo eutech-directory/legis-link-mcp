@@ -1,182 +1,145 @@
-# Legis-Link MCP — Construction Compliance AI
+<p align="center">
+  <img src="https://legis-link.com/icon-192.png" width="96" height="96" alt="Legis-Link"/>
+</p>
 
-[![npm version](https://img.shields.io/npm/v/legis-link-mcp.svg)](https://www.npmjs.com/package/legis-link-mcp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Glama Score](https://glama.ai/mcp/servers/eutech-directory/legis-link-mcp/badges/score.svg)](https://glama.ai/mcp/servers/eutech-directory/legis-link-mcp)
+<h1 align="center">Legis-Link</h1>
 
-**Instant construction compliance answers on mobile. Free. No install. Any phone.**
+<p align="center"><b>Construction compliance answers for the trades, inside Claude, Cursor, VS Code or any phone.</b><br/>
+Australia · United Kingdom · United States · Canada · European Union</p>
 
-Ask any compliance question in plain English. Get the exact standard, clause, and table reference back in seconds.
+<p align="center">
+  <a href="https://legis-link.com/app">Try it free</a> ·
+  <a href="#connect-to-claude-or-any-mcp-client">Connect via MCP</a> ·
+  <a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Get Pro</a>
+</p>
 
-## Live Demo
-
-**Try it now:** https://legis-link.com/app
-
-No account required. 50 free queries/day.
-
----
-
-## 9 Tools
-
-### Free Tier (50 queries/day, no account)
-| Tool | What it does |
-|------|-------------|
-| **Compliance check** | COMPLIANT / NON-COMPLIANT verdict with exact clause |
-| **Code reference** | Look up any standard, clause, or table |
-| **Toolbox talks** | Daily trade-specific safety briefing (10 trades, 70 topics) |
-
-### Pro Tier ($199/year — 1,000 queries/day)
-| Tool | What it does |
-|------|-------------|
-| **Technical calculations** | Cable sizing, pipe sizing, voltage drop, heat load |
-| **Safety checklist** | PPE + hazard controls with regulation per item |
-| **RAMS generator** | Full Risk Assessment + Method Statement in 60 seconds |
-| **Material compliance** | COMPLIANT / NON-COMPLIANT before ordering |
-| **Inspection requirements** | Hold points, sign-off authority, form numbers |
-| **Visual compliance** | Upload a site photo — AI compliance assessment (unique in market) |
+<!-- mcp-name: com.legis-link/legis-link -->
 
 ---
 
-## Coverage — 87 Regions, 10 Trades
+Ask a compliance question in plain English, such as *"Is 2.5 mm² TPS OK on a 20 A circuit in a wall cavity in NSW?"*.
+Legis-Link gives you a verdict (**Compliant / Non-compliant / Needs checking**), the standard and clause it rests on,
+and the conditions that would change the answer.
 
-| Region | Coverage | Standards |
-|--------|----------|-----------|
-| Australia | 8 states + territories | AS/NZS 3000:2018, NCC 2022, WHS Acts |
-| United States | All 50 states + DC | NEC NFPA 70, IBC, OSHA 29 CFR 1926 |
-| Canada | 10 provinces | CEC CSA C22.1, NBC, NPC |
-| United Kingdom | England, Scotland, Wales, N.Ireland | BS 7671:2018, CDM 2015, Gas Safe |
-| European Union | 14 countries | EN standards, IEC 60364 |
+- **Answers the normal case first.** It doesn't mark something non-compliant because of an unstated worst case.
+- **Cites the edition in force:** AS/NZS 3000:2018, BS 7671:2018+A4:2026, AS/NZS 3500:2025, AS/NZS 5601.1:2022.
+  For the NEC and US plumbing codes it names the edition each state has adopted instead of guessing.
+- **Checked licensing data:** who may legally do the work, the licence class, the apprentice route and the
+  contractor licence, for **110 trade-and-region combinations** across 22 jurisdictions.
+- **Tested:** a 21-question known-answer set (electrical, plumbing, gas; AU, UK, US) runs against the live server
+  after every change. Current score: **21 / 21**.
 
-**10 Trades:** Electrical, Plumbing, HVAC, Gas fitting, Welding, Solar/Battery, Fire protection, Carpentry, Concrete, Roofing
+## Tools
 
----
+All tools are **read-only**: they look things up and write text. They never change, send or delete anything.
 
-## MCP Integration
+| Tool | Tier | What it does |
+|------|------|--------------|
+| **Check compliance** | Free | Verdict + standard, clause and conditions |
+| **Look up a code or standard** | Free | The clause or table that applies, in plain English |
+| **List supported regions** | Free | Jurisdictions covered for a trade |
+| **Calculate a technical spec** | Pro | Cable size, voltage drop, pipe size, heat load |
+| **Generate a safety checklist** | Pro | PPE and hazard controls, each tied to its regulation |
+| **Generate RAMS** | Pro | Risk assessment and method statement in about a minute |
+| **Verify material compliance** | Pro | Will this product pass, before you order it |
+| **Get inspection requirements** | Pro | Hold points, who signs off, which certificate |
 
-Use Legis-Link from Claude, ChatGPT, Cursor, Windsurf, VS Code or any MCP-compatible AI tool. No sign-in is needed for the free tier.
+The [web app](https://legis-link.com/app) also has a daily toolbox talk per trade (a PDF for Pro users) and a photo check.
 
-**Server URL (streamable HTTP):** `https://legis-link.com/mcp`
-**Older clients (SSE only):** `https://legis-link.com/sse`
+## Coverage
 
-### Claude (web, desktop and mobile)
-Settings → Connectors → **Add custom connector**. Name `Legis-Link`, URL:
-```
-https://legis-link.com/mcp
-```
-Pro users add their key: `https://legis-link.com/mcp?key=ll_p_your_key`
+| Area | Regions | Checked licensing data |
+|------|---------|------------------------|
+| Australia | all 8 states and territories | all 8 |
+| United Kingdom | England, Scotland, Wales, Northern Ireland | all 4 |
+| United States | all 50 states + DC | California, Texas, Florida, New York |
+| Canada | 10 provinces | Ontario, British Columbia, Alberta |
+| European Union | 14 countries | Ireland, Germany, France |
 
-### Claude Desktop (config file)
-`claude_desktop_config.json` (Settings → Developer → Edit Config):
+**Trades:** Electrical, Plumbing, Gas fitting, HVAC/refrigeration, Carpentry, plus Welding, Solar/Battery,
+Fire protection, Concrete and Roofing.
+Regions without checked data still get an answer, marked to be checked against the local code.
+
+## Connect to Claude or any MCP client
+
+**Server URL (streamable HTTP):** `https://legis-link.com/mcp`. No sign-in is needed for the free tier.
+
+**Claude (web, desktop, mobile):** Settings → Connectors → **Add custom connector**. Name: `Legis-Link`. URL: `https://legis-link.com/mcp`.
+Pro: `https://legis-link.com/mcp?key=ll_p_your_key`
+
+**Cursor / Windsurf / VS Code**
 ```json
 {
   "mcpServers": {
     "legis-link": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://legis-link.com/mcp"]
+      "url": "https://legis-link.com/mcp",
+      "headers": { "X-API-Key": "ll_p_your_key (optional, Pro)" }
     }
   }
 }
 ```
 
-### Cursor / Windsurf / VS Code
+**Claude Desktop (config file)**
 ```json
 {
   "mcpServers": {
-    "legis-link": {
-      "url": "https://legis-link.com/mcp"
-    }
+    "legis-link": { "command": "npx", "args": ["-y", "mcp-remote", "https://legis-link.com/mcp"] }
   }
 }
 ```
-Pro key: send it as the `X-API-Key` header, as `Authorization: Bearer ll_p_...`, or add `?key=ll_p_...` to the URL.
 
-### Example queries via MCP
+A Pro key can be sent as the `X-API-Key` header, as `Authorization: Bearer ll_p_...`, or as `?key=ll_p_...` on the URL.
+Older SSE-only clients can use `https://legis-link.com/sse`.
+
+### Try asking
 ```
-"What cable size for 45A, 30m run, 240V single phase, NSW?"
-"Generate a RAMS for electrical switchboard installation in NSW"
-"Is 6mm2 XLPE cable compliant for underground installation in NSW?"
-"What are the inspection hold points for a timber frame in NSW?"
-"Wire size for 60A circuit, 50 feet run, 240V, California?"
+Is 2.5mm2 twin and earth OK for a 32A ring final circuit in England?
+Can an unregistered handyman replace the gas hob in a rented flat in England?
+What is the maximum hot water temperature at a new bathroom basin in NSW?
+Who can legally do gas work in Ontario?
+Generate a RAMS for a switchboard upgrade in a house in Victoria
 ```
 
----
+## Pricing
 
-## Self-Host
+| | Free | Pro |
+|---|---|---|
+| Price | $0 | $199 / year |
+| Questions per day | 50 | 1,000 |
+| Tools | 3 | 8 |
+| Toolbox talk PDFs | | ✓ |
 
-### Requirements
-- Python 3.11+
-- Anthropic API key
+**Get Pro:** https://rickyfarmer.gumroad.com/l/Legis-LinkPro. Your key is sent to your purchase email.
 
-### Install
+## API
+
+```
+GET  https://legis-link.com/health
+POST https://legis-link.com/api/query    {"trade": "Electrical", "region": "NSW", "question": "...", "api_key": ""}
+GET  https://legis-link.com/toolbox?trade=Electrical&region=NSW
+GET  https://legis-link.com/.well-known/mcp/server-card.json
+```
+
+## Self-host
+
+Python 3.11+ and an Anthropic API key.
 ```bash
 git clone https://github.com/eutech-directory/legis-link-mcp.git
 cd legis-link-mcp
 pip install -r requirements.txt
+ANTHROPIC_API_KEY=... python legis_link_mcp_server.py
 ```
-
-### Configure
-```bash
-cp legis_link.env.example legis_link.env
-# Edit legis_link.env with your API keys
-```
-
-### Run
-```bash
-python legis_link_mcp_server.py
-```
-
-Server runs on `http://localhost:8080`
-
----
-
-## API
-
-### Health check
-```
-GET /health
-```
-
-### Compliance query
-```
-POST /api/query
-{
-  "trade": "Electrical",
-  "region": "NSW",
-  "question": "Wire size for 45A load, 30m run?",
-  "api_key": ""
-}
-```
-
-### Daily toolbox talk
-```
-GET /toolbox?trade=Electrical
-```
-
-### Toolbox PDF (Pro)
-```
-GET /toolbox/pdf?trade=Electrical&region=NSW&api_key=ll_p_xxx
-```
-
----
-
-## Pricing
-
-| Tier | Price | Queries/day | Tools |
-|------|-------|-------------|-------|
-| Free | $0 | 50 | 3 |
-| Pro | $199/year | 1,000 | 9 |
-
-**Get Pro:** https://rickyfarmer.gumroad.com/l/Legis-LinkPro
-
----
+Optional: `DATABASE_URL` (PostgreSQL) for usage limits and keys; `LEGIS_KEY_SECRET` to issue Pro keys.
 
 ## Links
 
-- **Live app:** https://legis-link.com/app
-- **GitHub:** https://github.com/eutech-directory/legis-link-mcp
+- **App:** https://legis-link.com/app
+- **Official MCP Registry:** `com.legis-link/legis-link`
 - **Smithery:** https://smithery.ai/server/ricky-farmerai/construction-legis-link-mcp
 - **Glama:** https://glama.ai/mcp/servers/eutech-directory/legis-link-mcp
 
 ---
 
-*Results are preliminary compliance references. Always verify against the full published standard before proceeding with any installation.*
+*Legis-Link gives preliminary compliance references to help qualified people work faster. Always confirm against
+the published standard and your local authority before installing, and use a licensed person where the law
+requires one.*

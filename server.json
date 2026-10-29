@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.legis-link/legis-link",
+  "title": "Legis-Link",
+  "description": "Construction compliance answers for trades: AU, UK, US, Canada and EU codes, RAMS and checklists.",
+  "version": "3.15.0",
+  "websiteUrl": "https://legis-link.com",
+  "repository": {
+    "url": "https://github.com/eutech-directory/legis-link-mcp",
+    "source": "github"
+  },
+  "icons": [
+    { "src": "https://legis-link.com/icon-512.png", "mimeType": "image/png", "sizes": ["512x512"] },
+    { "src": "https://legis-link.com/icon-192.png", "mimeType": "image/png", "sizes": ["192x192"] },
+    { "src": "https://legis-link.com/icon.svg", "mimeType": "image/svg+xml", "sizes": ["any"] }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://legis-link.com/mcp",
+      "headers": [
+        {
+          "name": "X-API-Key",
+          "description": "Optional Legis-Link Pro key (starts with ll_p_). Leave empty for the free tier.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
