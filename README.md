@@ -10,7 +10,7 @@ Ask any compliance question in plain English. Get the exact standard, clause, an
 
 ## Live Demo
 
-**Try it now:** https://legis-link-mcp-production-3e9b.up.railway.app/app
+**Try it now:** https://legis-link.com/app
 
 No account required. 50 free queries/day.
 
@@ -55,15 +55,15 @@ No account required. 50 free queries/day.
 
 Use Legis-Link from Claude, ChatGPT, Cursor, Windsurf, VS Code or any MCP-compatible AI tool. No sign-in is needed for the free tier.
 
-**Server URL (streamable HTTP):** `https://legis-link-mcp-production-3e9b.up.railway.app/mcp`
-**Older clients (SSE only):** `https://legis-link-mcp-production-3e9b.up.railway.app/sse`
+**Server URL (streamable HTTP):** `https://legis-link.com/mcp`
+**Older clients (SSE only):** `https://legis-link.com/sse`
 
 ### Claude (web, desktop and mobile)
 Settings → Connectors → **Add custom connector**. Name `Legis-Link`, URL:
 ```
-https://legis-link-mcp-production-3e9b.up.railway.app/mcp
+https://legis-link.com/mcp
 ```
-Pro users add their key: `https://legis-link-mcp-production-3e9b.up.railway.app/mcp?key=ll_p_your_key`
+Pro users add their key: `https://legis-link.com/mcp?key=ll_p_your_key`
 
 ### Claude Desktop (config file)
 `claude_desktop_config.json` (Settings → Developer → Edit Config):
@@ -72,7 +72,7 @@ Pro users add their key: `https://legis-link-mcp-production-3e9b.up.railway.app/
   "mcpServers": {
     "legis-link": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://legis-link-mcp-production-3e9b.up.railway.app/mcp"]
+      "args": ["-y", "mcp-remote", "https://legis-link.com/mcp"]
     }
   }
 }
@@ -83,7 +83,7 @@ Pro users add their key: `https://legis-link-mcp-production-3e9b.up.railway.app/
 {
   "mcpServers": {
     "legis-link": {
-      "url": "https://legis-link-mcp-production-3e9b.up.railway.app/mcp"
+      "url": "https://legis-link.com/mcp"
     }
   }
 }
@@ -172,7 +172,7 @@ GET /toolbox/pdf?trade=Electrical&region=NSW&api_key=ll_p_xxx
 
 ## Links
 
-- **Live app:** https://legis-link-mcp-production-3e9b.up.railway.app/app
+- **Live app:** https://legis-link.com/app
 - **GitHub:** https://github.com/eutech-directory/legis-link-mcp
 - **Smithery:** https://smithery.ai/server/ricky-farmerai/construction-legis-link-mcp
 - **Glama:** https://glama.ai/mcp/servers/eutech-directory/legis-link-mcp

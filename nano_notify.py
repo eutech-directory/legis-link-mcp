@@ -105,7 +105,7 @@ def _send_email(subject: str, message: str) -> bool:
     <div style="padding:12px 20px;border-top:1px solid #1e293b;font-size:11px;color:#64748b;font-family:monospace">
       Sent: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC &nbsp;|&nbsp; 
       NANO AI Agency &nbsp;|&nbsp; 
-      <a href="https://legis-link-mcp-production-3e9b.up.railway.app" style="color:#3b82f6">Legis-Link</a>
+      <a href="https://legis-link.com" style="color:#3b82f6">Legis-Link</a>
     </div>
   </div>
 </body>
@@ -216,7 +216,7 @@ def notify_daily_summary(queries: int, pro_sales: int, revenue: float) -> dict:
         f"Legis-Link queries: {queries:,}\n"
         f"Pro sales today: {pro_sales}\n"
         f"Revenue today: ${revenue:.2f}\n\n"
-        f"Dashboard: https://legis-link-mcp-production-3e9b.up.railway.app/health"
+        f"Dashboard: https://legis-link.com/health"
     )
     return notify(message, "Daily Summary")
 
