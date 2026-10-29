@@ -28,7 +28,7 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 # ── CONFIG ────────────────────────────────────────────────────────────────
-TELEGRAM_TOKEN   = "8587526488:AAEqwKpuFHrC3F_by9LjKDQLt4xvZpi1QoA"
+TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")   # Railway / .env only
 TELEGRAM_CHAT_ID = "2119918902"
 TELEGRAM_URL     = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
