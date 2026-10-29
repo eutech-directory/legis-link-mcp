@@ -53,30 +53,42 @@ No account required. 50 free queries/day.
 
 ## MCP Integration
 
-Use Legis-Link from Claude Desktop, Cursor, Windsurf, or any MCP-compatible AI tool.
+Use Legis-Link from Claude, ChatGPT, Cursor, Windsurf, VS Code or any MCP-compatible AI tool. No sign-in is needed for the free tier.
 
-### Claude Desktop
-Add to `claude_desktop_config.json`:
+**Server URL (streamable HTTP):** `https://legis-link-mcp-production-3e9b.up.railway.app/mcp`
+**Older clients (SSE only):** `https://legis-link-mcp-production-3e9b.up.railway.app/sse`
+
+### Claude (web, desktop and mobile)
+Settings → Connectors → **Add custom connector**. Name `Legis-Link`, URL:
+```
+https://legis-link-mcp-production-3e9b.up.railway.app/mcp
+```
+Pro users add their key: `https://legis-link-mcp-production-3e9b.up.railway.app/mcp?key=ll_p_your_key`
+
+### Claude Desktop (config file)
+`claude_desktop_config.json` (Settings → Developer → Edit Config):
 ```json
 {
   "mcpServers": {
     "legis-link": {
-      "url": "https://legis-link-mcp-production-3e9b.up.railway.app/sse"
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://legis-link-mcp-production-3e9b.up.railway.app/mcp"]
     }
   }
 }
 ```
 
-### Cursor / Windsurf
+### Cursor / Windsurf / VS Code
 ```json
 {
   "mcpServers": {
     "legis-link": {
-      "url": "https://legis-link-mcp-production-3e9b.up.railway.app/sse"
+      "url": "https://legis-link-mcp-production-3e9b.up.railway.app/mcp"
     }
   }
 }
 ```
+Pro key: send it as the `X-API-Key` header, as `Authorization: Bearer ll_p_...`, or add `?key=ll_p_...` to the URL.
 
 ### Example queries via MCP
 ```
