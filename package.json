@@ -1,6 +1,6 @@
 {
   "name": "legis-link-mcp",
-  "version": "3.2.4",
+  "version": "3.4.0",
   "description": "Construction compliance AI — 9 tools, 87 regions, 10 trades. Instant code answers on mobile. Free tier available. AU (AS/NZS 3000) · UK (BS 7671) · USA all 50 states (NEC NFPA 70) · Canada · EU.",
   "main": "legis_link_mcp_server.py",
   "scripts": {
@@ -39,8 +39,5 @@
   },
   "engines": {
     "python": ">=3.11"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
   }
 }

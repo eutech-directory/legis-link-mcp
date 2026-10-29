@@ -9,3 +9,11 @@ node_modules/
 
 *.bak
 *.bak_*
+
+legis-link-videos/
+package-lock.json
+node_modules/
+
+legis-link-videos/
+package-lock.json
+node_modules/
