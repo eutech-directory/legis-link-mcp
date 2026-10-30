@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.21.0"
+VERSION           = "3.22.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -3050,6 +3050,122 @@ _PRACTICE = {
         "1 m high (higher for large falls); openings no wider than 0.1 m within 0.7 m of the floor; no footholds between "
         "0.2 and 0.7 m in dwellings. Structural timber: NEN-EN 1995 (Eurocode 5). New houses fall under the Wkb. Do NOT "
         "cite UK or US codes.\n"
+    ),
+    # LL-23: solar for Canada and the EU, and roofing for all 10 countries
+    ("solar", "CA"): (
+        "PRACTICE REFERENCE - Canada, solar PV and batteries (reviewed):\n"
+        "- Canadian Electrical Code Part I (CSA C22.1) Section 64 (renewable energy and storage systems) and Section 84 "
+        "(interconnection), as adopted by the province (Ontario: OESC with an ESA notification). Inverters certified to "
+        "CSA C22.2 No. 107.1 / UL 1741.\n"
+        "- Work by a licensed electrical contractor (Ontario ESA licence; BC Technical Safety BC; Alberta Master Electrician "
+        "permits). The local utility must approve the connection (Alberta: Micro-generation Regulation).\n"
+    ),
+    ("solar", "IE"): (
+        "PRACTICE REFERENCE - Ireland, solar PV and batteries (reviewed):\n"
+        "- Micro-generation (up to 25 A single-phase, about 6 kVA, or 16 A three-phase, about 11 kVA): notify ESB "
+        "Networks (NC6 form or online) with the inverter's type test certificate to I.S. EN 50549-1 (Irish settings); "
+        "larger systems need a connection application. Installation must be by a Registered Electrical Contractor (Safe "
+        "Electric) to I.S. 10101. SEAI solar grants require an SEAI-registered company. Do NOT cite UK G98/G99 or MCS.\n"
+    ),
+    ("solar", "DE"): (
+        "PRACTICE REFERENCE - Germany, solar PV and batteries (reviewed):\n"
+        "- Rooftop systems: apply to the grid operator (Netzbetreiber) before connection; installed and commissioned by an "
+        "electrician entered in the grid operator's Installateurverzeichnis, following VDE-AR-N 4105 and the operator's "
+        "TAB; then register in the Marktstammdatenregister within one month (needed for the EEG feed-in tariff).\n"
+        "- Plug-in balcony systems (Steckersolargeraete): inverter output up to 800 W, registration only in the "
+        "Marktstammdatenregister (simplified form). Do NOT cite UK or US rules.\n"
+    ),
+    ("solar", "FR"): (
+        "PRACTICE REFERENCE - France, solar PV and batteries (reviewed):\n"
+        "- NF C 15-100 and the PV installation guide UTE C 15-712-1 (and -2 for batteries); a Consuel attestation de "
+        "conformite before Enedis connects the system; a declaration prealable de travaux (urbanisme) for roof panels in "
+        "most cases. An RGE (QualiPV) installer is required for the purchase tariff and self-consumption premium - check "
+        "the current arrete tarifaire. Do NOT cite UK or US rules.\n"
+    ),
+    ("solar", "ES"): (
+        "PRACTICE REFERENCE - Spain, solar PV and batteries (reviewed):\n"
+        "- Real Decreto 244/2019 (autoconsumo) and REBT ITC-BT-40 (generating installations); installed by an empresa "
+        "instaladora habilitada, which issues the certificado de instalacion; registration in the autonomous community's "
+        "self-consumption register; municipal licence or declaracion responsable for the works. Do NOT cite UK or US rules.\n"
+    ),
+    ("solar", "IT"): (
+        "PRACTICE REFERENCE - Italy, solar PV and batteries (reviewed):\n"
+        "- DM 37/2008 lettera a) (impresa abilitata, Dichiarazione di Conformita); connection to the low-voltage grid under "
+        "CEI 0-21, through the grid operator (small systems via the simplified Modello Unico); GSE for incentives. Roof "
+        "panels on most buildings count as edilizia libera, except in protected areas. Do NOT cite UK or US rules.\n"
+    ),
+    ("solar", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, solar PV and batteries (reviewed):\n"
+        "- NEN 1010 (including the PV section) for the installation; register the system with the grid operator via "
+        "energieleveren.nl. Net metering (salderingsregeling) ends on 1 January 2027 by law, so payback advice should not "
+        "assume it continues. No licence is required, but work must meet NEN 1010. Do NOT cite UK or US rules.\n"
+    ),
+    ("roofing", "AU"): (
+        "PRACTICE REFERENCE - Australia, roofing (reviewed):\n"
+        "- WHS Regulations: work where a person could fall more than 2 m is high-risk construction work needing a SWMS; "
+        "control falls with edge protection, scaffolding or guardrails first, then fall-arrest systems.\n"
+        "- Metal roofing to AS 1562.1 and the manufacturer's installation guide (HB 39 is the industry installation "
+        "code); tiles to AS 2050; NCC Housing Provisions for roof construction. Roof plumbing (gutters, flashings, "
+        "downpipes) is licensed plumbing work in most states.\n"
+    ),
+    ("roofing", "UK"): (
+        "PRACTICE REFERENCE - United Kingdom, roofing (reviewed):\n"
+        "- Work at Height Regulations 2005 and CDM 2015: avoid work at height where possible, then use collective "
+        "protection (scaffold edge protection) before personal fall arrest; there is no minimum height below which the "
+        "rules do not apply.\n"
+        "- Slating and tiling to BS 5534 (fixing specification for wind uplift); flat roofs to BS 8217 / BS 6229. "
+        "Replacing more than 25% of a roof is notifiable building work and triggers thermal upgrade under Part L where "
+        "practical.\n"
+    ),
+    ("roofing", "US"): (
+        "PRACTICE REFERENCE - United States, roofing (reviewed):\n"
+        "- OSHA 29 CFR 1926.501: fall protection for construction work at 6 ft or more, including residential "
+        "construction (1926.501(b)(13)) and low-slope roofs (guardrails, safety nets, personal fall arrest, or warning "
+        "lines with a safety monitor).\n"
+        "- IRC Chapter 9 (roof assemblies) as adopted locally, including underlayment, ice barrier in cold climates, and "
+        "the shingle manufacturer's installation instructions and wind rating. Roofing licences are state- or "
+        "city-specific (e.g. Illinois, Florida require a state roofing licence).\n"
+    ),
+    ("roofing", "CA"): (
+        "PRACTICE REFERENCE - Canada, roofing (reviewed):\n"
+        "- Provincial OHS: fall protection is required where a worker could fall 3 m or more (Ontario O. Reg. 213/91; BC "
+        "and Alberta have similar 3 m rules); in Ontario, workers using fall protection need approved Working at Heights "
+        "training (O. Reg. 297/13).\n"
+        "- Roofing for houses: NBC / provincial Part 9, Section 9.26 (roofing), plus the manufacturer's instructions.\n"
+    ),
+    ("roofing", "IE"): (
+        "PRACTICE REFERENCE - Ireland, roofing (reviewed):\n"
+        "- Safety, Health and Welfare at Work (General Application) Regulations 2007, Part 4 Chapter 1 (work at height) "
+        "and the Construction Regulations 2013: collective protection first. Building Regulations TGD (A, B, L) for "
+        "the roof. CIRI registration as it becomes mandatory. Do NOT cite UK regulations.\n"
+    ),
+    ("roofing", "DE"): (
+        "PRACTICE REFERENCE - Germany, roofing (reviewed):\n"
+        "- Fall protection on construction sites from 2 m fall height (DGUV Vorschrift 38, ASR A2.1), collective "
+        "protection first. Dachdecker is a Meister trade (Handwerksordnung). Work to the Fachregeln des Dachdeckerhandwerks "
+        "(ZVDH). Do NOT cite UK or US rules.\n"
+    ),
+    ("roofing", "FR"): (
+        "PRACTICE REFERENCE - France, roofing (reviewed):\n"
+        "- Code du travail (travaux en hauteur): collective protection (garde-corps, filets) takes priority over harnesses. "
+        "Roof coverings to the NF DTU 40 series (e.g. 40.21 tiles, 40.35 steel sheet); couvreur is a regulated activity "
+        "(qualification professionnelle); decennale insurance. Do NOT cite UK or US rules.\n"
+    ),
+    ("roofing", "ES"): (
+        "PRACTICE REFERENCE - Spain, roofing (reviewed):\n"
+        "- RD 1627/1997 (construction sites) and RD 2177/2004 (work at height): collective protection first; the CTE DB "
+        "HS 1 for roof waterproofing. The firm needs REA registration. Do NOT cite UK or US rules.\n"
+    ),
+    ("roofing", "IT"): (
+        "PRACTICE REFERENCE - Italy, roofing (reviewed):\n"
+        "- D.Lgs. 81/2008: work at height (lavori in quota) above 2 m needs fall protection, collective first. Many regions "
+        "require permanent anchor devices (linee vita) on roofs when roofs are built or renovated - check the regional "
+        "law. Firms on site need the patente a crediti. Do NOT cite UK or US rules.\n"
+    ),
+    ("roofing", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, roofing (reviewed):\n"
+        "- Arbobesluit: measures against falling are required from 2.5 m fall height, collective protection first. The roof "
+        "must meet the Bbl; no roofing licence is required. Do NOT cite UK or US rules.\n"
     ),
 }
 

@@ -100,6 +100,15 @@ CASES = [
      {"COMPLIANT", "INFO"}, r"36", None, "Carpentry"),
     ("NSW", "Does a deck 1.2 m above the ground need a balustrade?",
      {"COMPLIANT", "INFO", "NON_COMPLIANT"}, r"(?i)1\s?m|1000\s?mm", None, "Carpentry"),
+    # Solar EU/CA and roofing (LL-23)
+    ("Germany", "Where do I have to register a new rooftop solar system?",
+     {"COMPLIANT", "INFO"}, r"(?i)Marktstammdatenregister|MaStR", r"(?i)\bG98\b|\bMCS\b", "Solar / Battery"),
+    ("Ireland", "Do I need to notify ESB Networks before installing 5 kW of solar on my house?",
+     {"COMPLIANT", "INFO"}, r"NC6", r"(?i)\bG98\b", "Solar / Battery"),
+    ("Texas", "At what height do roofers need fall protection on a house?",
+     {"COMPLIANT", "INFO"}, r"(?i)6\s?(ft|feet|foot)", None, "Roofing"),
+    ("Ontario", "At what height is fall protection required for roofers?",
+     {"COMPLIANT", "INFO"}, r"(?i)3\s?m", None, "Roofing"),
 ]
 
 
