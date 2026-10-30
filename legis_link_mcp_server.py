@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.24.0"
+VERSION           = "3.24.1"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -2555,7 +2555,8 @@ _ANSWER_RULES = (
     "- SCOPE: keep law, standard and guidance distinct (e.g. UK: Electricity at Work Regulations 1989 = law; BS 7671 = "
     "standard; IET On-Site Guide and GN3 = guidance). Never borrow another country's concepts: NFPA 70E arc-flash PPE "
     "categories, OSHA and the NEC are US-only; Part P, Gas Safe, G98/G99 and MCS are UK-only; ARC/ARCtick are "
-    "Australian; RGI and Safe Electric are Irish.\n"
+    "Australian; RGI and Safe Electric are Irish. Do not mention another country's laws or standards at all - not even "
+    "to say they do not apply - unless the user asks about that country.\n"
     "- DOCUMENTS (RAMS, checklists, method statements) are DRAFTS for a competent person to review for the specific "
     "site: never describe a document as compliant, and list the project information still needed.\n"
     "- LANGUAGE: write the whole answer in English, for every country (Czech Republic, Germany, France and so on). "
@@ -3653,10 +3654,39 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
     return result
 
 
+# LL-26: stronger models need more time and room. Long timeout, larger output for documents, one retry on
+# overload/rate-limit/timeout, then the fallback model, so users get an answer instead of an ERROR.
+FALLBACK_MODEL = os.environ.get("LEGIS_FALLBACK_MODEL", "") or "claude-haiku-4-5-20251001"
+
+
 async def _ask_claude_raw(system_prompt: str, user_message: str) -> dict:
-    """Call Anthropic API. Falls back to OpenAI on billing errors."""
+    """Call Anthropic API with retry and model fallback. Falls back to OpenAI on billing errors."""
+    import asyncio as _aio
     system_prompt = system_prompt + _practice_for(user_message)
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    is_doc = ("You are a construction RAMS expert" in system_prompt
+              or "Generate a numbered safety checklist" in system_prompt
+              or "inspection" in system_prompt[:400].lower())
+    attempts = [(MODEL, 0), (MODEL, 4)]
+    if FALLBACK_MODEL and FALLBACK_MODEL != MODEL:
+        attempts.append((FALLBACK_MODEL, 0))
+    last = {"status": "ERROR", "result": "The answer service did not respond. Please try again.", "code_reference": ""}
+    for model_name, wait in attempts:
+        if wait:
+            await _aio.sleep(wait)
+        result = await _ask_claude_once(system_prompt, user_message, model_name, 8000 if is_doc else 4096)
+        if result.get("status") != "ERROR" or result.get("_final"):
+            result.pop("_retry", None)
+            result.pop("_final", None)
+            return result
+        logging.warning(f"AI call failed on {model_name}: {str(result.get('result'))[:160]}")
+        last = result
+    last.pop("_retry", None)
+    last.pop("_final", None)
+    return last
+
+
+async def _ask_claude_once(system_prompt: str, user_message: str, model_name: str, max_tokens: int) -> dict:
+    async with httpx.AsyncClient(timeout=180.0) as client:
         try:
             resp = await client.post(
                 ANTHROPIC_URL,
@@ -3666,8 +3696,8 @@ async def _ask_claude_raw(system_prompt: str, user_message: str) -> dict:
                     "content-type": "application/json",
                 },
                 json={
-                    "model": MODEL,
-                    "max_tokens": 2048,
+                    "model": model_name,
+                    "max_tokens": max_tokens,
                     "system": system_prompt,
                     "messages": [{"role": "user", "content": user_message}],
                 }
@@ -3682,8 +3712,11 @@ async def _ask_claude_raw(system_prompt: str, user_message: str) -> dict:
                 "credit balance" in error_body or "billing" in error_body.lower()
             ):
                 logging.warning("Anthropic credits exhausted — falling back to OpenAI")
-                return await _ask_openai(system_prompt, user_message)
+                r = await _ask_openai(system_prompt, user_message)
+                r["_final"] = True
+                return r
 
+            # 400/401/403 (bad request, key or model name) will not improve by retrying the same model
             return {"status": "ERROR",
                     "result": f"API error {resp.status_code}: {error_body[:200]}",
                     "code_reference": ""}

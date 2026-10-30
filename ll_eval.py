@@ -160,7 +160,7 @@ def main():
         trade = case[5] if len(case) > 5 else "Electrical"
         try:
             r = httpx.post(URL + "/api/query", json={"question": q, "trade": trade, "region": region,
-                                                     "tool": "check_compliance", "api_key": KEY}, timeout=90)
+                                                     "tool": "check_compliance", "api_key": KEY}, timeout=420)
             d = r.json()
         except Exception as e:
             print(f"{i:2d} ERROR  {region}: {q}\n    {e}")
@@ -171,6 +171,9 @@ def main():
         status = str(d.get("status", "")).upper().replace("-", "_")
         text = str(d.get("result", "")) + " " + str(d.get("code_reference", ""))
         problems = []
+        if status == "ERROR":
+            print(f"{i:2d} ERROR  {region} {trade}: {q}\n    service error: {str(d.get('result', ''))[:220]}")
+            continue
         if status not in ok_status:
             problems.append("verdict " + status + " (expected " + " or ".join(sorted(ok_status)) + ")")
         if must and not re.search(must, text):
@@ -187,7 +190,7 @@ def main():
         total += 1
         try:
             r = httpx.post(URL + "/api/query", json={"question": task, "trade": trade, "region": region,
-                                                     "tool": "generate_rams", "api_key": KEY}, timeout=120)
+                                                     "tool": "generate_rams", "api_key": KEY}, timeout=420)
             d = r.json()
         except Exception as e:
             print(f"   ERROR  RAMS {region}: {e}")
@@ -199,7 +202,8 @@ def main():
             passed += 1
             print(f"   PASS   RAMS {region}: labelled DRAFT")
         else:
-            print(f"   FAIL   RAMS {region}: status {status or r.status_code}" + (f"; says {bad.group(0)}" if bad else ""))
+            print(f"   FAIL   RAMS {region}: status {status or r.status_code}" + (f"; says {bad.group(0)}" if bad else "")
+                  + (f"; service error: {text[:200]}" if status == "ERROR" else ""))
     print(f"\n{passed}/{total} passed")
     sys.exit(0 if passed == len(CASES) else 1)
 
