@@ -124,6 +124,25 @@ CASES = [
      {"COMPLIANT", "INFO"}, r"300\s?ms", r"(?i)5\s?x\s?I.?n\s+(test )?is required|must (also )?be tested at 5", "Electrical"),
     ("Texas", "Is 10 AWG copper on a 40A breaker OK for a receptacle circuit?",
      {"NON_COMPLIANT"}, r"240\.4", None, "Electrical"),
+    # Fire protection, welding, concrete (LL-25)
+    ("NSW", "Which standard covers routine servicing of fire sprinkler systems?",
+     {"COMPLIANT", "INFO"}, r"1851", r"(?i)NFPA\s?25", "Fire protection"),
+    ("England", "Who is legally responsible for fire safety in a commercial workshop?",
+     {"COMPLIANT", "INFO"}, r"(?i)responsible person|Fire Safety\)? Order", None, "Fire protection"),
+    ("Texas", "Which NFPA standard covers sprinklers in one- and two-family dwellings?",
+     {"COMPLIANT", "INFO"}, r"13D", None, "Fire protection"),
+    ("England", "Is general ventilation enough when welding mild steel indoors?",
+     {"NON_COMPLIANT", "INFO", "COMPLIANT"}, r"(?i)LEV|local exhaust", None, "Welding"),
+    ("Texas", "Which OSHA rules cover welding and cutting on a construction site?",
+     {"COMPLIANT", "INFO"}, r"(?i)Subpart J|1926\.35", None, "Welding"),
+    ("QLD", "Which Australian standard covers welding of structural steel?",
+     {"COMPLIANT", "INFO"}, r"1554", r"(?i)AWS\s?D1\.1", "Welding"),
+    ("California", "What is the OSHA permissible exposure limit for respirable crystalline silica in construction?",
+     {"COMPLIANT", "INFO"}, r"(?<!\d)50(?!\d)", None, "Concrete"),
+    ("England", "What is the workplace exposure limit for respirable crystalline silica?",
+     {"COMPLIANT", "INFO"}, r"0\.1\s?mg", r"(?i)OSHA", "Concrete"),
+    ("VIC", "Can I install an engineered stone kitchen benchtop in a new house?",
+     {"NON_COMPLIANT"}, r"(?i)ban|prohibit", None, "Concrete"),
 ]
 
 

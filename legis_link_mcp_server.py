@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.23.0"
+VERSION           = "3.24.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -3181,6 +3181,222 @@ _PRACTICE = {
         "PRACTICE REFERENCE - Netherlands, roofing (reviewed):\n"
         "- Arbobesluit: measures against falling are required from 2.5 m fall height, collective protection first. The roof "
         "must meet the Bbl; no roofing licence is required. Do NOT cite UK or US rules.\n"
+    ),
+    # LL-25: fire protection, welding and concrete references for all 10 countries
+    ("fire protection", "AU"): (
+        "PRACTICE REFERENCE - Australia, fire protection (reviewed):\n"
+        "- Standards (cite these names; give edition years only as shown): AS 1851-2012 (routine service of fire protection "
+        "systems and equipment), AS 2118.1 (automatic sprinklers), AS 1670.1 (fire detection and alarm), AS 2444 "
+        "(portable extinguishers and fire blankets), AS 3786 (smoke alarms). The NCC sets which buildings need which "
+        "measures; houses need smoke alarms to AS 3786 (hard-wired and interconnected in new work).\n"
+        "- Licensing varies by state: e.g. NSW requires accreditation under the Fire Protection Accreditation Scheme (FPAS) "
+        "for assessing and certifying fire safety measures; Victoria licenses fire protection plumbing; Queensland QBCC "
+        "licenses fire protection work. Name the state scheme and say to confirm the class.\n"
+    ),
+    ("fire protection", "UK"): (
+        "PRACTICE REFERENCE - United Kingdom, fire protection (reviewed):\n"
+        "- Law: Regulatory Reform (Fire Safety) Order 2005 in England and Wales (the 'responsible person' must carry out and "
+        "keep a fire risk assessment and maintain fire safety measures), plus the Fire Safety (England) Regulations 2022 for "
+        "multi-occupied residential buildings and the Building Safety Act 2022 for higher-risk buildings. Scotland and "
+        "Northern Ireland have their own fire safety law - say so.\n"
+        "- Building Regulations Approved Document B (fire safety). Standards: BS 5839-1 (non-domestic fire detection and "
+        "alarm), BS 5839-6 (dwellings), BS EN 12845 (sprinklers), BS 9251 (residential sprinklers), BS 5306-3 "
+        "(extinguisher servicing). Third-party certification (e.g. BAFE, LPCB) is good practice, not a legal licence.\n"
+        "- Rented homes in England: smoke alarm on each storey and CO alarm with fixed combustion appliances (Smoke and Carbon "
+        "Monoxide Alarm (Amendment) Regulations 2022).\n"
+    ),
+    ("fire protection", "US"): (
+        "PRACTICE REFERENCE - United States, fire protection (reviewed):\n"
+        "- Codes and standards as adopted by the state or city: IBC and IFC Chapter 9 (which buildings need sprinklers and "
+        "alarms), NFPA 13 (sprinklers), NFPA 13R (low-rise residential), NFPA 13D (one- and two-family dwellings and "
+        "manufactured homes), NFPA 72 (fire alarm), NFPA 25 (inspection, testing and maintenance of water-based systems), "
+        "NFPA 10 (portable extinguishers). The IRC requires sprinklers in new one- and two-family homes (R313), but many "
+        "states have removed that requirement - check the adopted code.\n"
+        "- Licensing is state-specific (often the State Fire Marshal; e.g. California C-16 Fire Protection Contractor); "
+        "NICET certification is commonly required for design and inspection.\n"
+    ),
+    ("fire protection", "CA"): (
+        "PRACTICE REFERENCE - Canada, fire protection (reviewed):\n"
+        "- National Building Code and National Fire Code as adopted by the province (Ontario: OBC and Ontario Fire Code). "
+        "Fire alarm: CAN/ULC-S524 (installation), CAN/ULC-S537 (verification), CAN/ULC-S536 (inspection and testing). "
+        "Sprinklers: NFPA 13 as referenced by the codes; inspection under NFPA 25.\n"
+        "- Sprinkler and Fire Protection Installer (427A) is a compulsory trade in Ontario.\n"
+    ),
+    ("fire protection", "IE"): (
+        "PRACTICE REFERENCE - Ireland, fire protection (reviewed):\n"
+        "- Fire Services Acts 1981 and 2003; Building Regulations Part B (TGD B); a Fire Safety Certificate from the local "
+        "building control authority is needed for most non-domestic buildings and apartments before work starts.\n"
+        "- Standards: I.S. 3218 (fire detection and alarm), I.S. EN 12845 (sprinklers), I.S. 291 (portable extinguishers). "
+        "Do NOT cite the UK Fire Safety Order or BS 5839.\n"
+    ),
+    ("fire protection", "DE"): (
+        "PRACTICE REFERENCE - Germany, fire protection (reviewed):\n"
+        "- Fire safety requirements come from the state building codes (Landesbauordnungen) and special building rules. "
+        "Smoke alarms (Rauchwarnmelder) are compulsory in dwellings in every state, installed and maintained to DIN 14676. "
+        "Fire alarm systems: DIN 14675 (firms certified for the phases they carry out) with DIN VDE 0833-2; sprinklers often "
+        "to VdS CEA 4001; workplaces: ASR A2.2 (fire extinguishers). Do NOT cite UK or US codes.\n"
+    ),
+    ("fire protection", "FR"): (
+        "PRACTICE REFERENCE - France, fire protection (reviewed):\n"
+        "- Every dwelling must have at least one smoke alarm (DAAF) conforming to NF EN 14604 (compulsory since 8 March 2015). "
+        "Public buildings (ERP): the reglement de securite incendie (arrete du 25 juin 1980 as amended); workplaces: Code du "
+        "travail. Sprinklers and detection often follow the APSAD rules (CNPP), e.g. R1 sprinklers, R7 detection; systeme "
+        "de securite incendie (SSI) standards NF S 61-970 series. Do NOT cite UK or US codes.\n"
+    ),
+    ("fire protection", "ES"): (
+        "PRACTICE REFERENCE - Spain, fire protection (reviewed):\n"
+        "- Reglamento de instalaciones de proteccion contra incendios (RIPCI, Real Decreto 513/2017): installation and "
+        "maintenance only by enabled companies (empresas instaladoras / mantenedoras, declaracion responsable to the "
+        "autonomous community), with set periodic maintenance and inspection. Building design: CTE DB SI. Do NOT cite UK or "
+        "US codes.\n"
+    ),
+    ("fire protection", "IT"): (
+        "PRACTICE REFERENCE - Italy, fire protection (reviewed):\n"
+        "- DPR 151/2011 (activities subject to fire brigade checks, SCIA antincendio); DM 3 agosto 2015 (Codice di prevenzione "
+        "incendi); DM 1 settembre 2021 (control and maintenance of fire systems): from 25 September 2026 the work must be "
+        "done by a tecnico manutentore qualificato with the Vigili del Fuoco attestation. Detection UNI 9795, sprinklers "
+        "UNI EN 12845; installation by an impresa abilitata under DM 37/2008. Do NOT cite UK or US codes.\n"
+    ),
+    ("fire protection", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, fire protection (reviewed):\n"
+        "- Bbl (fire safety); smoke alarms are compulsory on every floor with a habitable room in all homes since 1 July 2022. "
+        "Fire alarm systems NEN 2535, evacuation alarms NEN 2575; where the permit or Bbl requires it, a certified "
+        "installation (CCV scheme). Do NOT cite UK or US codes.\n"
+    ),
+    ("welding", "AU"): (
+        "PRACTICE REFERENCE - Australia, welding (reviewed):\n"
+        "- Structural steel welding: AS/NZS 1554 series (e.g. Part 1 for structural steel), with welder and procedure "
+        "qualification as that standard requires. Hot work: AS 1674.1 (fire precautions), with a hot work permit where the "
+        "site requires it.\n"
+        "- Welding fume is a Group 1 human carcinogen (IARC); control with local exhaust ventilation and suitable RPE under "
+        "the WHS Regulations and Safe Work Australia's exposure standards (check the current figure for welding fumes).\n"
+    ),
+    ("welding", "UK"): (
+        "PRACTICE REFERENCE - United Kingdom, welding (reviewed):\n"
+        "- HSE (since 2019): all welding fume, including mild steel, is treated as a human carcinogen; general ventilation is "
+        "not enough. Indoor welding needs engineering control, normally local exhaust ventilation (LEV); add suitable RPE "
+        "where LEV does not adequately control exposure; outdoor welding needs RPE; this applies whatever the duration "
+        "(COSHH). LEV must be maintained and thoroughly examined and tested.\n"
+        "- Structural steelwork: BS EN 1090-2 (execution) with UKCA/CE marking requiring factory production control and a "
+        "welding quality system to BS EN ISO 3834; welder qualification BS EN ISO 9606-1; procedures BS EN ISO 15614-1. Hot "
+        "work permits on site.\n"
+    ),
+    ("welding", "US"): (
+        "PRACTICE REFERENCE - United States, welding (reviewed):\n"
+        "- OSHA: 29 CFR 1926 Subpart J (welding and cutting in construction) and 1910 Subpart Q (general industry); "
+        "hexavalent chromium standard (1926.1126) for stainless and coated metals; fire prevention per NFPA 51B (hot work).\n"
+        "- Structural welding: AWS D1.1 (steel), with welder and procedure qualification per the code; inspection by a "
+        "qualified inspector (e.g. AWS CWI) as the building code and engineer require. Some cities license or certify "
+        "structural welders - check locally.\n"
+    ),
+    ("welding", "CA"): (
+        "PRACTICE REFERENCE - Canada, welding (reviewed):\n"
+        "- Structural steel fabricators and erectors must be certified to CSA W47.1 (administered by the CWB), as required "
+        "by CSA S16; welding to CSA W59. Welder is a compulsory trade in Alberta. Hot work and fume control under provincial "
+        "OHS regulations.\n"
+    ),
+    ("welding", "IE"): (
+        "PRACTICE REFERENCE - Ireland, welding (reviewed):\n"
+        "- Structural steel: I.S. EN 1090-1/-2 with CE marking (factory production control, I.S. EN ISO 3834 welding quality), "
+        "welder qualification I.S. EN ISO 9606-1, procedures EN ISO 15614-1. Welding fume is a carcinogen - control with "
+        "LEV and RPE under the Safety, Health and Welfare at Work (Chemical Agents / Carcinogens) Regulations; hot work "
+        "permits. Do NOT cite UK HSE as Irish law.\n"
+    ),
+    ("welding", "DE"): (
+        "PRACTICE REFERENCE - Germany, welding (reviewed):\n"
+        "- Structural steel: DIN EN 1090-1/-2 (CE marking with certified factory production control and welding coordinator "
+        "per DIN EN ISO 14731), quality DIN EN ISO 3834, welder qualification DIN EN ISO 9606-1. Fume and exposure: TRGS 528 "
+        "(Schweisstechnische Arbeiten) under the Gefahrstoffverordnung; hot work: DGUV rules and the site's "
+        "Schweisserlaubnis. Do NOT cite UK or US rules.\n"
+    ),
+    ("welding", "FR"): (
+        "PRACTICE REFERENCE - France, welding (reviewed):\n"
+        "- Structural steel: NF EN 1090-1/-2 (CE marking), NF EN ISO 3834, welder qualification NF EN ISO 9606-1. Hot work "
+        "needs a permis de feu; fume control and exposure limits under the Code du travail (INRS guidance). Do NOT cite UK "
+        "or US rules.\n"
+    ),
+    ("welding", "ES"): (
+        "PRACTICE REFERENCE - Spain, welding (reviewed):\n"
+        "- Structural steel: UNE-EN 1090-1/-2 (CE marking), UNE-EN ISO 3834, welder qualification UNE-EN ISO 9606-1; the "
+        "Codigo Estructural (RD 470/2021) for steel structures. Fume control under RD 374/2001 (chemical agents) and RD "
+        "665/1997 (carcinogens); hot work permits. Do NOT cite UK or US rules.\n"
+    ),
+    ("welding", "IT"): (
+        "PRACTICE REFERENCE - Italy, welding (reviewed):\n"
+        "- Structural steel: UNI EN 1090-1/-2 (CE marking) and NTC 2018, UNI EN ISO 3834, welder qualification UNI EN ISO "
+        "9606-1. Fume and carcinogen control under D.Lgs. 81/2008 (Titolo IX); hot work under the site safety plan. Do NOT "
+        "cite UK or US rules.\n"
+    ),
+    ("welding", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, welding (reviewed):\n"
+        "- Structural steel: NEN-EN 1090-1/-2 (CE marking), NEN-EN ISO 3834, welder qualification NEN-EN ISO 9606-1. Welding "
+        "fume under the Arbobesluit with source extraction; hot work permit on site. Do NOT cite UK or US rules.\n"
+    ),
+    ("concrete", "AU"): (
+        "PRACTICE REFERENCE - Australia, concrete (reviewed):\n"
+        "- Standards: AS 3600 (concrete structures), AS 1379 (specification and supply of concrete), AS 2870 (residential "
+        "slabs and footings), AS 3610 (formwork), AS 3850 (prefabricated concrete elements).\n"
+        "- Silica: the workplace exposure standard for respirable crystalline silica is 0.05 mg/m3 (8-hour TWA). Engineered "
+        "stone benchtops, panels and slabs have been banned from use (manufacture, supply, processing and installation) "
+        "since 1 July 2024, with limited exceptions such as removal and repair; WHS Regulations set duties for other "
+        "crystalline silica processes (cutting, grinding, drilling concrete): water suppression or on-tool extraction and "
+        "RPE.\n"
+    ),
+    ("concrete", "UK"): (
+        "PRACTICE REFERENCE - United Kingdom, concrete (reviewed):\n"
+        "- Design: Eurocode 2 (BS EN 1992-1-1 with the UK National Annex); specification BS 8500 with BS EN 206; execution BS "
+        "EN 13670.\n"
+        "- Silica: the workplace exposure limit for respirable crystalline silica is 0.1 mg/m3 (8-hour TWA, EH40); control "
+        "cutting, drilling and grinding with water suppression or on-tool extraction plus RPE under COSHH; CDM 2015 on site.\n"
+    ),
+    ("concrete", "US"): (
+        "PRACTICE REFERENCE - United States, concrete (reviewed):\n"
+        "- Design: ACI 318 (structural concrete, via the adopted IBC); ACI 301 (specifications); ACI 332 for residential "
+        "concrete; IRC Chapter 4 foundations.\n"
+        "- Silica: OSHA 1926.1153 - permissible exposure limit 50 micrograms per cubic metre (8-hour TWA), action level 25; "
+        "employers may follow the Table 1 control methods (water or vacuum dust collection plus specified respirators) "
+        "instead of exposure monitoring; written exposure control plan and competent person required.\n"
+    ),
+    ("concrete", "CA"): (
+        "PRACTICE REFERENCE - Canada, concrete (reviewed):\n"
+        "- CSA A23.1/A23.2 (concrete materials and construction methods), CSA A23.3 (design), and NBC Part 9 Section 9.3 for "
+        "houses, as adopted by the province. Silica exposure limits are set by each province's OHS rules - name the "
+        "province's limit rather than a US figure.\n"
+    ),
+    ("concrete", "IE"): (
+        "PRACTICE REFERENCE - Ireland, concrete (reviewed):\n"
+        "- I.S. EN 1992 (Eurocode 2) with the Irish National Annex; I.S. EN 206 with the Irish national annex. Respirable "
+        "crystalline silica: EU binding limit 0.1 mg/m3 (Directive 2017/2398), applied through the Carcinogens Regulations "
+        "and the HSA Code of Practice; dust control at source plus RPE. Do NOT cite UK EH40.\n"
+    ),
+    ("concrete", "DE"): (
+        "PRACTICE REFERENCE - Germany, concrete (reviewed):\n"
+        "- DIN EN 1992 with the German National Annex; DIN EN 206 with DIN 1045-2 (concrete), DIN 1045-3 (execution). "
+        "Respirable crystalline silica under the Gefahrstoffverordnung and TRGS 559 (mineral dust); EU binding limit "
+        "0.1 mg/m3 as the upper bound. Do NOT cite UK or US rules.\n"
+    ),
+    ("concrete", "FR"): (
+        "PRACTICE REFERENCE - France, concrete (reviewed):\n"
+        "- NF EN 1992 (Eurocode 2) with the French annex; NF EN 206/CN; execution NF EN 13670 and NF DTU 21. Silica exposure "
+        "limits (VLEP) under the Code du travail - at most the EU binding limit of 0.1 mg/m3 for respirable crystalline "
+        "silica. Do NOT cite UK or US rules.\n"
+    ),
+    ("concrete", "ES"): (
+        "PRACTICE REFERENCE - Spain, concrete (reviewed):\n"
+        "- The Codigo Estructural (Real Decreto 470/2021) replaced EHE-08 for concrete structures; UNE-EN 206. Silica under "
+        "RD 665/1997 (carcinogens) - at most the EU binding limit of 0.1 mg/m3; check INSST's current national limit. Do NOT "
+        "cite UK or US rules.\n"
+    ),
+    ("concrete", "IT"): (
+        "PRACTICE REFERENCE - Italy, concrete (reviewed):\n"
+        "- NTC 2018 (Norme Tecniche per le Costruzioni) and its Circolare, UNI EN 206 / UNI 11104. Respirable crystalline "
+        "silica is a carcinogen under D.Lgs. 81/2008 Titolo IX with the EU binding limit of 0.1 mg/m3. Do NOT cite UK or US "
+        "rules.\n"
+    ),
+    ("concrete", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, concrete (reviewed):\n"
+        "- NEN-EN 1992 with the Dutch National Annex; NEN-EN 206 with NEN 8005. The Dutch legal limit for respirable quartz is "
+        "0.075 mg/m3 (8-hour TWA) - lower than the EU 0.1 mg/m3. Do NOT cite UK or US rules.\n"
     ),
 }
 
