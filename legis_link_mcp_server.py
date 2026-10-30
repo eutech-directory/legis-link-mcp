@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.20.0"
+VERSION           = "3.21.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -2901,6 +2901,155 @@ _PRACTICE = {
         "- Licensing: a licensed electrician or electrical contractor (some states have a solar-specific licence, e.g. "
         "California C-46), plus building and electrical permits and the utility's interconnection approval. NABCEP "
         "certification is voluntary.\n"
+    ),
+    # LL-22: HVAC/refrigeration and carpentry references for all 10 countries
+    ("refrigeration", "AU"): (
+        "PRACTICE REFERENCE - Australia, HVAC and refrigeration (reviewed):\n"
+        "- Anyone handling refrigerant needs an Australian Refrigeration Council (ARC) refrigerant handling licence, and "
+        "businesses that buy or store refrigerant need an ARCtick refrigerant trading authorisation (Ozone Protection and "
+        "Synthetic Greenhouse Gas Management Act 1989). Electrical connection needs a licensed electrician or the state's "
+        "restricted electrical licence for disconnect/reconnect.\n"
+        "- Standards: AS/NZS 5149 (safety of refrigerating systems and heat pumps, including A2L refrigerants such as R32), "
+        "AS 1668.2 (ventilation), AS/NZS 3666 (air-handling and cooling water systems, Legionella), AS/NZS 3000 for wiring.\n"
+    ),
+    ("refrigeration", "UK"): (
+        "PRACTICE REFERENCE - United Kingdom, HVAC and refrigeration (reviewed):\n"
+        "- F-gas: the GB F-gas Regulation (retained Regulation (EU) 517/2014 as amended) - a personal F-gas certificate "
+        "(categories I-IV) to install, service, leak-check or recover refrigerant, and company F-gas certification for "
+        "firms doing this work for others.\n"
+        "- Standards and rules: BS EN 378 (refrigerating systems and heat pumps, including A2L refrigerants), Building "
+        "Regulations Part F (ventilation) and Part L (energy efficiency); heat pumps under MCS MIS 3005 for grants and "
+        "export schemes. Gas-fired heating is gas work for a Gas Safe engineer.\n"
+    ),
+    ("refrigeration", "US"): (
+        "PRACTICE REFERENCE - United States, HVAC and refrigeration (reviewed):\n"
+        "- EPA Section 608 certification (Type I, II, III or Universal) to buy or handle refrigerants.\n"
+        "- Refrigerant transition (AIM Act technology transitions rule): new residential and light-commercial AC and heat "
+        "pump systems must use refrigerants with GWP below 700 (e.g. R-454B, R-32), and R-410A components made or "
+        "imported on or after 1 January 2025 may not be used to assemble new systems. EPA removed the separate R-410A "
+        "installation deadline (rule effective 27 July 2026), so qualifying legacy inventory may still be installed and "
+        "existing R-410A systems may be serviced.\n"
+        "- Codes: IMC or UMC and the IRC mechanical chapters as adopted; ASHRAE 15 and UL 60335-2-40 for A2L refrigerants; "
+        "load calculation and equipment sizing per ACCA Manual J and S (IRC M1401.3).\n"
+    ),
+    ("refrigeration", "CA"): (
+        "PRACTICE REFERENCE - Canada, HVAC and refrigeration (reviewed):\n"
+        "- CSA B52 Mechanical refrigeration code; CSA B149.1 for gas-fired equipment; CSA F280 for residential heat loss "
+        "and gain (equipment sizing) where the provincial building code calls it up.\n"
+        "- Refrigerant handling: provincial rules (Ontario O. Reg. 463/10 ODP card; other provinces have their own "
+        "halocarbon regulations); the federal Halocarbon Regulations apply to federal works. Refrigeration and AC "
+        "mechanic is a compulsory trade in Ontario, BC and Alberta (see the licensing data).\n"
+    ),
+    ("refrigeration", "IE"): (
+        "PRACTICE REFERENCE - Ireland, HVAC and refrigeration (reviewed):\n"
+        "- F-gas: EU Regulation 2024/573 (replaced 517/2014 in March 2024) and Irish S.I.s - personal F-gas certificate and "
+        "company certificate from F-gas Registration Ltd.\n"
+        "- I.S. EN 378 for refrigerating systems and heat pumps; Building Regulations TGD F (ventilation) and TGD L "
+        "(energy). Gas-fired heating needs a Registered Gas Installer. Do NOT cite UK rules.\n"
+    ),
+    ("refrigeration", "DE"): (
+        "PRACTICE REFERENCE - Germany, HVAC and refrigeration (reviewed):\n"
+        "- F-gas: EU Regulation 2024/573 and the ChemKlimaschutzV - Sachkundebescheinigung for personnel and company "
+        "certification. Kaelteanlagenbauer and Installateur und Heizungsbauer are Meister trades (Handwerksordnung).\n"
+        "- DIN EN 378 for refrigerating systems and heat pumps; the Gebaeudeenergiegesetz (GEG) sets requirements for new "
+        "heating systems - name the GEG rather than quoting a percentage, as its rules are changing. Do NOT cite UK or "
+        "US codes.\n"
+    ),
+    ("refrigeration", "FR"): (
+        "PRACTICE REFERENCE - France, HVAC and refrigeration (reviewed):\n"
+        "- Fluides frigorigenes: attestation de capacite for the company and attestation d'aptitude for personnel (Code de "
+        "l'environnement R543-75 ff.); EU Regulation 2024/573.\n"
+        "- NF EN 378; RE2020 for new buildings; RGE certification is needed for clients to get MaPrimeRenov' and CEE "
+        "grants on heat pumps. Do NOT cite UK or US codes.\n"
+    ),
+    ("refrigeration", "ES"): (
+        "PRACTICE REFERENCE - Spain, HVAC and refrigeration (reviewed):\n"
+        "- RITE (RD 1027/2007) for heating, cooling and ventilation of buildings, installed by a RITE-enabled company; "
+        "RSIF (RD 552/2019) for refrigerating installations (empresa frigorista Nivel 1 or 2); F-gas handling certificate "
+        "(RD 115/2017). UNE-EN 378. Do NOT cite UK or US codes.\n"
+    ),
+    ("refrigeration", "IT"): (
+        "PRACTICE REFERENCE - Italy, HVAC and refrigeration (reviewed):\n"
+        "- DM 37/2008 lettera c) (impresa abilitata, Dichiarazione di Conformita); DPR 146/2018 F-gas certificates and the "
+        "national F-gas database; DPR 74/2013 for maintenance and energy-efficiency checks of heating and cooling systems "
+        "(libretto di impianto). UNI EN 378. Do NOT cite UK or US codes.\n"
+    ),
+    ("refrigeration", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, HVAC and refrigeration (reviewed):\n"
+        "- F-gas: EU Regulation 2024/573 - personal and company F-gas certificates. NEN-EN 378. Gas-fired heating needs a "
+        "CO-certified company (since 1 April 2023). Ventilation under the Bbl. Do NOT cite UK or US codes.\n"
+    ),
+    ("carpentry", "AU"): (
+        "PRACTICE REFERENCE - Australia, carpentry (reviewed):\n"
+        "- Timber framing: AS 1684 (residential timber-framed construction) and the NCC Housing Provisions; engineered "
+        "timber per the manufacturer's span tables.\n"
+        "- Stairs (NCC Housing Provisions Part 11.2): 2 to 18 risers per flight; riser and going limits from Table 11.2.2a "
+        "(risers 115-190 mm, goings 240-355 mm, 2R+G 550-700 mm); no openings in risers that let a 125 mm sphere pass.\n"
+        "- Barriers (Part 11.3): required where the fall is more than 1 m; at least 1 m high (865 mm along a stair flight); "
+        "openings must not let a 125 mm sphere pass; where the fall is more than 4 m, no climbable elements between "
+        "150 mm and 760 mm above the floor.\n"
+    ),
+    ("carpentry", "UK"): (
+        "PRACTICE REFERENCE - United Kingdom, carpentry (reviewed):\n"
+        "- Approved Document K (England) private stairs: rise 150-220 mm, going 220-300 mm, maximum pitch 42 degrees, "
+        "2R+G 550-700 mm, headroom 2 m. Guarding in dwellings: 900 mm on stairs and landings, 1100 mm at balconies and "
+        "other edges; no openings that let a 100 mm sphere pass where children under 5 may use the building.\n"
+        "- Structural timber: Eurocode 5 (BS EN 1995) with TRADA span tables; Approved Document A. Scotland, Wales and "
+        "Northern Ireland have their own technical guidance - say so for those nations.\n"
+    ),
+    ("carpentry", "US"): (
+        "PRACTICE REFERENCE - United States, carpentry (reviewed):\n"
+        "- IRC (as adopted by the state) stairs, R311.7: maximum riser 7-3/4 in, minimum tread 10 in, headroom 6 ft 8 in, "
+        "handrail 34-38 in high. Guards (R312): required where the drop is more than 30 in; minimum 36 in high; openings "
+        "must not pass a 4 in sphere.\n"
+        "- Framing: IRC Chapter 5 and 6 span tables and the American Wood Council NDS / WFCM. Name the IRC edition adopted "
+        "locally rather than guessing a year.\n"
+    ),
+    ("carpentry", "CA"): (
+        "PRACTICE REFERENCE - Canada, carpentry (reviewed):\n"
+        "- Part 9 of the National Building Code as adopted by the province (Ontario: 2024 OBC Part 9, Section 9.8 stairs "
+        "and guards). Guards are required where the difference in elevation is more than 600 mm; openings must not let a "
+        "100 mm sphere pass; avoid climbable members between 140 mm and 900 mm. Typical guard heights are 900 mm within "
+        "dwelling units and 1070 mm elsewhere - confirm in 9.8.8 for the province.\n"
+        "- Framing: Part 9 span tables (Section 9.23) and CSA O86 for engineered design.\n"
+    ),
+    ("carpentry", "IE"): (
+        "PRACTICE REFERENCE - Ireland, carpentry (reviewed):\n"
+        "- Building Regulations TGD K (stairways, ladders, ramps and guards) and TGD A (structure); I.S. EN 1995 (Eurocode "
+        "5) for timber. Cite TGD K, not the UK Approved Document K, though many values are similar (private stair maximum "
+        "rise 220 mm and pitch 42 degrees).\n"
+    ),
+    ("carpentry", "DE"): (
+        "PRACTICE REFERENCE - Germany, carpentry (reviewed):\n"
+        "- Stairs: DIN 18065 (in residential buildings with up to two dwellings: rise 14-20 cm, going 23-37 cm). Guards "
+        "(Umwehrungen) under the state building code (Landesbauordnung): typically at least 90 cm, 110 cm where the fall is "
+        "more than 12 m. Structural timber: DIN EN 1995 (Eurocode 5). Zimmerer and Tischler are Meister trades. Do NOT cite "
+        "UK or US codes.\n"
+    ),
+    ("carpentry", "FR"): (
+        "PRACTICE REFERENCE - France, carpentry (reviewed):\n"
+        "- Timber frames and roofs: NF DTU 31.1 (charpente) and NF DTU 31.2 (maisons a ossature bois); Eurocode 5. Guards "
+        "(garde-corps): NF P01-012 - protection height at least 1 m and gaps no larger than 11 cm. Decennale insurance is "
+        "mandatory. Do NOT cite UK or US codes.\n"
+    ),
+    ("carpentry", "ES"): (
+        "PRACTICE REFERENCE - Spain, carpentry (reviewed):\n"
+        "- CTE DB SUA 1: a protection barrier is required where the drop is more than 55 cm; height at least 0.90 m (fall "
+        "up to 6 m) or 1.10 m (fall over 6 m); no gaps that let a 10 cm sphere pass; in dwellings no footholds between 30 "
+        "and 50 cm. Timber structures: CTE DB SE-M. Do NOT cite UK or US codes.\n"
+    ),
+    ("carpentry", "IT"): (
+        "PRACTICE REFERENCE - Italy, carpentry (reviewed):\n"
+        "- Structural timber: NTC 2018 (Norme Tecniche per le Costruzioni) and Eurocode 5 (UNI EN 1995). Guard and stair "
+        "dimensions are set by local building regulations (regolamento edilizio) - say to check the comune. Firms on "
+        "construction sites need the patente a crediti. Do NOT cite UK or US codes.\n"
+    ),
+    ("carpentry", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, carpentry (reviewed):\n"
+        "- Bbl (new build): a vloerafscheiding (guard) is required where the height difference is more than 1 m; at least "
+        "1 m high (higher for large falls); openings no wider than 0.1 m within 0.7 m of the floor; no footholds between "
+        "0.2 and 0.7 m in dwellings. Structural timber: NEN-EN 1995 (Eurocode 5). New houses fall under the Wkb. Do NOT "
+        "cite UK or US codes.\n"
     ),
 }
 

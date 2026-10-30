@@ -89,6 +89,17 @@ CASES = [
      {"COMPLIANT", "INFO"}, r"G98", None, "Solar / Battery"),
     ("California", "Does a new rooftop solar system on a house need rapid shutdown?",
      {"COMPLIANT", "INFO", "NON_COMPLIANT"}, r"690\.12", None, "Solar / Battery"),
+    # HVAC and carpentry (LL-22)
+    ("QLD", "Do I need a licence to recharge refrigerant in a split system air conditioner?",
+     {"COMPLIANT", "INFO", "NON_COMPLIANT"}, r"(?i)ARC|refrigerant handling licen", None, "HVAC"),
+    ("Texas", "Do I need EPA certification to buy R-410A refrigerant?",
+     {"COMPLIANT", "INFO", "NON_COMPLIANT"}, r"608", None, "HVAC"),
+    ("England", "Is a 230mm rise OK on a private staircase in a new house?",
+     {"NON_COMPLIANT"}, r"220", None, "Carpentry"),
+    ("California", "What is the minimum guard height on a deck 4 feet above the ground?",
+     {"COMPLIANT", "INFO"}, r"36", None, "Carpentry"),
+    ("NSW", "Does a deck 1.2 m above the ground need a balustrade?",
+     {"COMPLIANT", "INFO", "NON_COMPLIANT"}, r"(?i)1\s?m|1000\s?mm", None, "Carpentry"),
 ]
 
 
