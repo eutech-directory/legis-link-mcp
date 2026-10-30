@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.18.0"
+VERSION           = "3.19.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -1841,6 +1841,143 @@ LICENCE_REGISTRY = {
         "url": "https://www.lni.wa.gov/licensing-permits/contractors/",
         "asat": "checked Oct 2026",
     },
+    # ── EU (LL-20): Spain, Italy, Netherlands. Checked Oct 2026 against REBT ITC-BT-03, RD 770/2025 reporting, Italian
+    # Chambers of Commerce (DM 37/2008), Ondernemersplein and Kiwa (CO certification). EU-wide F-gas rules also apply.
+    ("electrical", "SPAIN"): {
+        "law": "Reglamento Electrotecnico para Baja Tension (REBT, Real Decreto 842/2002), ITC-BT-03 (installer companies); RD 770/2025 (staffing changes, in force September 2025)",
+        "regulator": "The autonomous community's industry department (e.g. Comunidad de Madrid, Generalitat de Catalunya)",
+        "individual": "Persona instaladora habilitada en baja tension, proving a qualification (degree, vocational title, certificate of professionalism, recognised experience or accredited certification), working within an enabled company",
+        "trainee": "Vocational training (FP) in electrical installations; work under an enabled company",
+        "contractor": "Empresa instaladora en baja tension: declaracion responsable to the autonomous community BEFORE starting, category Basica (IBTB) or Especialista (IBTE), liability insurance of at least EUR 600,000 (IBTB) or EUR 900,000 (IBTE) per claim, at least one qualified installer (no longer required full-time since RD 770/2025). Issues the certificado de instalacion (boletin)",
+        "url": "https://normatia.com/es/normativa/rebt/2025/itc-bt-03-empresas-instaladoras-en-baja-tension/",
+        "asat": "checked Oct 2026 (REBT ITC-BT-03, RD 770/2025 reporting)",
+    },
+    ("plumbing", "SPAIN"): {
+        "law": "Codigo Tecnico de la Edificacion (CTE) DB HS 4 (water supply) and DB HS 5 (drainage); hot water production falls under the RITE (Real Decreto 1027/2007)",
+        "regulator": "Municipal building control; the autonomous community for RITE and any regional water-installer registers",
+        "individual": "No national licence for plumbing (water and drainage) work; some autonomous communities register water installers - check the region. Heating and hot water systems need a RITE-enabled installer",
+        "trainee": "Vocational training (FP) in plumbing and thermal installations",
+        "contractor": "No national plumbing contractor licence; empresa habilitada RITE (declaracion responsable) for heating, hot water and air conditioning; REA registration when working as a contractor or subcontractor on construction sites",
+        "url": "https://www.codigotecnico.org/",
+        "asat": "checked Oct 2026",
+    },
+    ("gas", "SPAIN"): {
+        "law": "Reglamento tecnico de distribucion y utilizacion de combustibles gaseosos (Real Decreto 919/2006), ITC-ICG 09; RD 770/2025",
+        "regulator": "The autonomous community's industry department",
+        "individual": "Persona instaladora de gas habilitada, category A, B or C (A widest), within an enabled gas company",
+        "trainee": "Vocational training and the qualification required for the category; work under an enabled company",
+        "contractor": "Empresa instaladora de gas: declaracion responsable to the autonomous community, category A, B or C, with at least one installer of equal or higher category (full-time no longer required since RD 770/2025). Issues the certificate of installation; gas is supplied only after it",
+        "url": "https://www.interempresas.net/Climatizacion/606572-El-nuevo-RD-770-2025-flexibiliza-la-contratacion-de-instaladores-de-gas-y-frigoristas.html",
+        "asat": "checked Oct 2026 (RD 770/2025 reporting)",
+    },
+    ("refrigeration", "SPAIN"): {
+        "law": "Reglamento de seguridad para instalaciones frigorificas (RSIF, Real Decreto 552/2019); RITE (RD 1027/2007) for building air conditioning; Real Decreto 115/2017 (fluorinated gases); RD 770/2025",
+        "regulator": "The autonomous community's industry department",
+        "individual": "Persona instaladora frigorista habilitada (RSIF) and/or RITE installer; F-gas handling certificate (RD 115/2017) to handle refrigerants",
+        "trainee": "Vocational training (FP) in refrigeration and air conditioning",
+        "contractor": "Empresa frigorista Nivel 1 or Nivel 2 (declaracion responsable): a qualified frigorista, and for Nivel 2 also a university-qualified technical manager (any lawful contract type since RD 770/2025); empresa habilitada RITE for building heating and air conditioning",
+        "url": "https://industria.gob.es/Calidad-Industrial/seguridadindustrial/instalacionesindustriales/instaciones-frigorificas/Paginas/reglamento-seguridad-rd-5522019.aspx",
+        "asat": "checked Oct 2026",
+    },
+    ("carpentry", "SPAIN"): {
+        "law": "Ley 38/1999 de Ordenacion de la Edificacion (LOE); Ley 32/2006 on subcontracting in construction; CTE",
+        "regulator": "Municipal building control; the autonomous community's labour authority keeps the REA",
+        "individual": "No licence needed to work as a carpenter; construction-sector safety training (Tarjeta Profesional de la Construccion) is commonly required on site",
+        "trainee": "Vocational training (FP) / apprenticeship contracts",
+        "contractor": "Registro de Empresas Acreditadas (REA) for any company contracted or subcontracted on construction works; municipal licence or declaracion responsable for the works",
+        "url": "https://www.mites.gob.es/",
+        "asat": "checked Oct 2026",
+    },
+    ("electrical", "ITALY"): {
+        "law": "Decreto Ministeriale 22 gennaio 2008 n. 37 (DM 37/2008), lettera a) electrical systems; CEI 64-8 (low-voltage installations)",
+        "regulator": "Camera di Commercio (Registro Imprese / Albo Imprese Artigiane) verifies the technical requirements",
+        "individual": "No personal licence for employees; the firm's responsabile tecnico must meet the DM 37/2008 technical requirements (relevant degree or diploma plus experience)",
+        "trainee": "Apprendistato; work under an enabled firm",
+        "contractor": "Impresa abilitata for lettera a) registered with the Camera di Commercio; contracts with unenabled firms are void. Must issue the Dichiarazione di Conformita (DiCo) with its annexes after testing; needed for the municipal agibilita",
+        "url": "https://www.mi.camcom.it/documents/d/guest/vademecum-per-il-consumatore-impiantisti",
+        "asat": "checked Oct 2026 (Camera di Commercio Milano)",
+    },
+    ("plumbing", "ITALY"): {
+        "law": "DM 37/2008 lettera d) water and sanitary systems (lettera c) for heating)",
+        "regulator": "Camera di Commercio",
+        "individual": "No personal licence for employees; the firm's responsabile tecnico meets the DM 37/2008 requirements",
+        "trainee": "Apprendistato; work under an enabled firm",
+        "contractor": "Impresa abilitata for lettera d) (and c) for heating) registered with the Camera di Commercio; issues the Dichiarazione di Conformita",
+        "url": "https://www.mi.camcom.it/documents/d/guest/vademecum-per-il-consumatore-impiantisti",
+        "asat": "checked Oct 2026",
+    },
+    ("gas", "ITALY"): {
+        "law": "DM 37/2008 lettera e) gas distribution and use (including flues and ventilation); UNI 7129 for domestic gas installations",
+        "regulator": "Camera di Commercio; the gas distributor checks documentation before activating supply",
+        "individual": "No personal licence for employees; the firm's responsabile tecnico meets the DM 37/2008 requirements",
+        "trainee": "Apprendistato; work under an enabled firm",
+        "contractor": "Impresa abilitata for lettera e) registered with the Camera di Commercio; issues the Dichiarazione di Conformita, which the distributor needs before turning on new supply",
+        "url": "https://www.mi.camcom.it/documents/d/guest/vademecum-per-il-consumatore-impiantisti",
+        "asat": "checked Oct 2026",
+    },
+    ("refrigeration", "ITALY"): {
+        "law": "DM 37/2008 lettera c) heating, air conditioning and ventilation; DPR 146/2018 (fluorinated gases: certificates and the national F-gas database)",
+        "regulator": "Camera di Commercio; F-gas certification bodies and the Registro telematico nazionale F-gas",
+        "individual": "Personal F-gas certificate (DPR 146/2018) to install, service or leak-check equipment with F-gas refrigerants",
+        "trainee": "Apprendistato; work under an enabled firm",
+        "contractor": "Impresa abilitata for lettera c) registered with the Camera di Commercio, plus company F-gas certification; interventions recorded in the national F-gas database",
+        "url": "https://www.mi.camcom.it/documents/d/guest/vademecum-per-il-consumatore-impiantisti",
+        "asat": "checked Oct 2026",
+    },
+    ("carpentry", "ITALY"): {
+        "law": "D.Lgs. 81/2008 (site safety); D.L. 19/2024 'patente a crediti' for firms and self-employed working on temporary or mobile construction sites (from 1 October 2024)",
+        "regulator": "Camera di Commercio; Ispettorato Nazionale del Lavoro (patente a crediti)",
+        "individual": "No licence needed to work as a carpenter; site safety training under D.Lgs. 81/2008",
+        "trainee": "Apprendistato",
+        "contractor": "Registration with the Camera di Commercio, DURC (contributions certificate) and the patente a crediti to work on construction sites (firms with SOA class III or higher are exempt); SOA qualification for public works over EUR 150,000",
+        "url": "https://www.ispettorato.gov.it/",
+        "asat": "checked Oct 2026",
+    },
+    ("electrical", "NETHERLANDS"): {
+        "law": "Besluit bouwwerken leefomgeving (Bbl, under the Omgevingswet since 1 January 2024), which calls up NEN 1010 for electrical installations; NEN 3140 for safe operation",
+        "regulator": "Municipality (bouwtoezicht); no trade licensing body",
+        "individual": "NO licence required to be an electrician; the installation must meet NEN 1010. Work must be done by a competent person (NEN 3140 roles such as vakbekwaam persoon)",
+        "trainee": "MBO (BBL/BOL) electrical training",
+        "contractor": "No licence; voluntary recognition (e.g. InstallQ-erkend) and KvK registration. Grid connection follows the network operator's rules",
+        "url": "https://www.nen.nl/",
+        "asat": "checked Oct 2026",
+    },
+    ("plumbing", "NETHERLANDS"): {
+        "law": "Bbl (Omgevingswet) calling up NEN 1006 for drinking water installations; Drinkwaterbesluit and Legionella rules for priority installations",
+        "regulator": "Municipality; the water company for connections; ILT for Legionella in priority buildings",
+        "individual": "NO licence required to work as a plumber; the installation must meet NEN 1006 (and the Waterwerkbladen guidance). Gas appliance work needs CO certification - see gas",
+        "trainee": "MBO installation technology training",
+        "contractor": "No licence; KvK registration and voluntary recognition",
+        "url": "https://www.nen.nl/",
+        "asat": "checked Oct 2026",
+    },
+    ("gas", "NETHERLANDS"): {
+        "law": "Gasketelwet / Woningwet art. 152b and the building regulations (Bbl): mandatory CO certification; NEN 1078 for gas installations",
+        "regulator": "Certification bodies (e.g. Kiwa) under the schemes InstallQ BRL 6000-25 or BRL K25000; municipality",
+        "individual": "Work on gas combustion installations (central heating boilers, gas fires and heaters, water heaters, air heaters and their air and flue ducts) must be done by a CO-certified company",
+        "trainee": "MBO installation training under a certified company",
+        "contractor": "CO certificate mandatory since 1 April 2023 to install, maintain, repair or commission gas combustion appliances; without it the work is not allowed and the client can also be prosecuted. Check the public register of certified companies",
+        "url": "https://ondernemersplein.overheid.nl/wetten-en-regels/co-certificaat-koolmonoxide-voor-cv-monteur/",
+        "asat": "checked Oct 2026 (Ondernemersplein, Kiwa)",
+    },
+    ("refrigeration", "NETHERLANDS"): {
+        "law": "EU F-gas Regulation and implementing rules; Bbl for building installations; gas-fired units also need CO certification",
+        "regulator": "Accredited certification bodies (personnel and company F-gas certificates); ILT enforces",
+        "individual": "Personal F-gas certificate to install, service, leak-check or recover refrigerant in stationary refrigeration, AC and heat pumps",
+        "trainee": "MBO refrigeration and climate training",
+        "contractor": "F-gas company certificate for firms doing this work for others",
+        "url": "https://www.ilent.nl/",
+        "asat": "checked Oct 2026",
+    },
+    ("carpentry", "NETHERLANDS"): {
+        "law": "Omgevingswet and Bbl; Wet kwaliteitsborging voor het bouwen (Wkb) since 1 January 2024 for new builds in gevolgklasse 1 (most houses), with an independent kwaliteitsborger and a consumer file; renovations are not under the Wkb notification duty",
+        "regulator": "Municipality; Toelatingsorganisatie Kwaliteitsborging Bouw (TloKB) for the kwaliteitsborgers",
+        "individual": "No licence needed to work as a carpenter",
+        "trainee": "MBO carpentry training",
+        "contractor": "No contractor licence; KvK registration. For Wkb projects the builder works with a kwaliteitsborger and hands over a consumentendossier",
+        "url": "https://omgevingsweb.nl/nieuws/verbouwprojecten-geen-onderdeel-van-meldingsplicht-wet-kwaliteitsborging-bouw/",
+        "asat": "checked Oct 2026",
+    },
 }
 
 # Trade names shown to users -> registry keys ("Gas fitting" and "HVAC" never matched before LL-4)
@@ -2658,11 +2795,73 @@ _PRACTICE = {
         "- The firm needs the qualification professionnelle and decennale insurance; the 'PG - Professionnel du Gaz' label is "
         "voluntary.\n"
     ),
+    # LL-20: electrical, plumbing and gas references for Spain, Italy, Netherlands
+    ("electrical", "ES"): (
+        "PRACTICE REFERENCE - Spain, electrical (reviewed):\n"
+        "- Code: Reglamento Electrotecnico para Baja Tension (REBT, RD 842/2002) and its ITC-BT instructions. Do NOT cite "
+        "BS 7671, the NEC or IEC tables as if they were Spanish law.\n"
+        "- Dwelling circuits (ITC-BT-25): C1 lighting 1.5 mm2 on 10 A; C2 general sockets 2.5 mm2 on 16 A; C3 cooker and "
+        "oven 6 mm2 on 25 A; C4 washing machine, dishwasher and water heater 4 mm2 on 20 A; C5 bathroom and kitchen "
+        "sockets 2.5 mm2 on 16 A. 30 mA differential protection.\n"
+        "- Work is done by an empresa instaladora habilitada, which issues the certificado de instalacion (boletin).\n"
+    ),
+    ("electrical", "IT"): (
+        "PRACTICE REFERENCE - Italy, electrical (reviewed):\n"
+        "- Rules: CEI 64-8 (low-voltage installations) and DM 37/2008. Do NOT cite BS 7671 or the NEC.\n"
+        "- Common dwelling practice: lighting 1.5 mm2 on 10 A, socket circuits 2.5 mm2 on 16 A; 30 mA differential (RCD) "
+        "protection. Ratings depend on the installation method - say so.\n"
+        "- Work is done by an impresa abilitata (DM 37/2008 lettera a), which issues the Dichiarazione di Conformita.\n"
+    ),
+    ("electrical", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, electrical (reviewed):\n"
+        "- Rules: NEN 1010 (low-voltage installations), called up by the Besluit bouwwerken leefomgeving (Bbl); NEN 3140 "
+        "for safe operation. Do NOT cite BS 7671 or the NEC. Name NEN 1010 without guessing an edition year.\n"
+        "- 30 mA RCD (aardlekschakelaar) protection for final circuits in dwellings. Ratings depend on the installation "
+        "method - say so.\n"
+        "- No licence is required to be an electrician, but the installation must meet NEN 1010.\n"
+    ),
+    ("plumbing", "ES"): (
+        "PRACTICE REFERENCE - Spain, plumbing (reviewed):\n"
+        "- Rules: CTE DB HS 4 (water supply) and DB HS 5 (drainage); hot water production and heating under the RITE "
+        "(RD 1027/2007). Do NOT cite UK or US codes.\n"
+        "- Heating, hot water and air conditioning systems must be installed by a RITE-enabled company; plain water and "
+        "drainage work has no national licence (check regional rules).\n"
+    ),
+    ("plumbing", "IT"): (
+        "PRACTICE REFERENCE - Italy, plumbing (reviewed):\n"
+        "- Water and sanitary installations are DM 37/2008 lettera d) (heating lettera c): only an impresa abilitata may do "
+        "the work, and it must issue the Dichiarazione di Conformita. Do NOT cite UK or US codes.\n"
+    ),
+    ("plumbing", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, plumbing (reviewed):\n"
+        "- Drinking water installations must meet NEN 1006 (called up by the Bbl). No licence is needed to be a plumber, "
+        "but any work on gas combustion appliances needs a CO-certified company. Do NOT cite UK or US codes.\n"
+    ),
+    ("gas", "ES"): (
+        "PRACTICE REFERENCE - Spain, gas (reviewed):\n"
+        "- Rules: Reglamento tecnico de distribucion y utilizacion de combustibles gaseosos (RD 919/2006). Gas work must be "
+        "done by an empresa instaladora de gas habilitada (category A, B or C) with a qualified persona instaladora; it "
+        "issues the installation certificate needed before supply. Do NOT cite UK or US codes.\n"
+    ),
+    ("gas", "IT"): (
+        "PRACTICE REFERENCE - Italy, gas (reviewed):\n"
+        "- Rules: UNI 7129 (domestic gas installations) and DM 37/2008 lettera e). Only an impresa abilitata may do the "
+        "work and it issues the Dichiarazione di Conformita, which the distributor needs before turning on new supply. "
+        "Do NOT cite UK or US codes.\n"
+    ),
+    ("gas", "NL"): (
+        "PRACTICE REFERENCE - Netherlands, gas (reviewed):\n"
+        "- Since 1 April 2023 only CO-certified companies (InstallQ BRL 6000-25 or BRL K25000) may install, maintain, "
+        "repair or commission gas combustion appliances such as central heating boilers, gas fires, water heaters and air "
+        "heaters; the client can also be prosecuted for hiring an uncertified firm. Gas installations follow NEN 1078. "
+        "Do NOT cite UK or US codes.\n"
+    ),
 }
 
 # LL-9: EU countries map to their own practice references
 _EU_COUNTRIES = {"IRELAND": "IE", "REPUBLIC OF IRELAND": "IE", "EIRE": "IE", "GERMANY": "DE", "DEUTSCHLAND": "DE",
-                 "FRANCE": "FR"}
+                 "FRANCE": "FR", "SPAIN": "ES", "ESPANA": "ES", "ITALY": "IT", "ITALIA": "IT",
+                 "NETHERLANDS": "NL", "THE NETHERLANDS": "NL", "NEDERLAND": "NL", "HOLLAND": "NL"}
 # LL-8: Canadian provinces map to CA practice references
 _CA_PROVINCES = {"ONTARIO", "BRITISH COLUMBIA", "ALBERTA", "QUEBEC", "MANITOBA", "SASKATCHEWAN", "NOVA SCOTIA",
                  "NEW BRUNSWICK", "NEWFOUNDLAND AND LABRADOR", "PRINCE EDWARD ISLAND", "CANADA", "ON", "BC", "AB"}

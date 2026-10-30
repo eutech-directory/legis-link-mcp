@@ -75,6 +75,13 @@ CASES = [
      {"COMPLIANT", "INFO"}, r"(?<!\d)50(?!\d)", None, "Plumbing"),
     ("Germany", "Which technical rules apply to a new gas installation in a house?",
      {"COMPLIANT", "INFO"}, r"TRGI|G\s?600", None, "Gas fitting"),
+    # Spain, Italy, Netherlands (LL-20)
+    ("Spain", "Is 2.5mm2 cable on a 16A breaker OK for a general socket circuit in a flat?",
+     {"COMPLIANT"}, r"(?i)REBT|ITC-BT", r"(?i)BS\s?7671|NEC\b", "Electrical"),
+    ("Italy", "What document must the installer give me after installing a new gas boiler?",
+     {"COMPLIANT", "INFO"}, r"(?i)conformit", None, "Gas fitting"),
+    ("Netherlands", "Can a company without a CO certificate replace my central heating boiler?",
+     {"NON_COMPLIANT"}, r"(?i)CO.?(certif|keur)", r"(?i)gas safe", "Gas fitting"),
 ]
 
 
