@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.19.0"
+VERSION           = "3.20.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -1982,7 +1982,8 @@ LICENCE_REGISTRY = {
 
 # Trade names shown to users -> registry keys ("Gas fitting" and "HVAC" never matched before LL-4)
 _TRADE_ALIAS = {"gas fitting": "gas", "gasfitting": "gas", "gas": "gas", "hvac": "refrigeration",
-                "refrigeration": "refrigeration", "air conditioning": "refrigeration"}
+                "refrigeration": "refrigeration", "air conditioning": "refrigeration",
+                "solar / battery": "solar", "solar/battery": "solar", "solar": "solar", "battery": "solar"}
 
 
 def _registry_ground(trade: str, region: str) -> str:
@@ -2855,6 +2856,51 @@ _PRACTICE = {
         "repair or commission gas combustion appliances such as central heating boilers, gas fires, water heaters and air "
         "heaters; the client can also be prosecuted for hiring an uncertified firm. Gas installations follow NEN 1078. "
         "Do NOT cite UK or US codes.\n"
+    ),
+    # LL-21: solar PV and battery practice references (AU, UK, US)
+    ("solar", "AU"): (
+        "PRACTICE REFERENCE - Australia, solar PV and batteries (reviewed):\n"
+        "- EDITIONS TO CITE: AS/NZS 4777.1:2024 (grid-connected inverter installation, mandatory from 23 February 2025; "
+        "inverters must comply with AS/NZS 4777.2:2020); AS/NZS 5033:2021 as amended (PV arrays); AS/NZS 5139:2019 with "
+        "Amendment 1:2025 (battery systems, published 19 December 2025 and now mandatory); AS/NZS 3000:2018 for the "
+        "rest of the installation.\n"
+        "- All low-voltage electrical work must be done by a licensed electrician. Solar Accreditation Australia (SAA) "
+        "accreditation of the designer and installer is required for the system to earn STCs under the Small-scale "
+        "Renewable Energy Scheme (SAA replaced the Clean Energy Council's accreditation in 2024).\n"
+        "- Batteries must not be installed in habitable rooms and must respect AS/NZS 5139 restricted locations "
+        "(clearances to exits, windows, vents and other openings); the 2025 amendment allows a battery within 600 mm of "
+        "an opening wider than 900 mm such as a garage door, treats inverters as associated appliances, and requires a "
+        "physical safety data sheet on site.\n"
+        "- Grid connection needs the network distributor's approval; single-phase inverter capacity limits and export "
+        "limits are set by the distributor (AS/NZS 4777.1:2024 caps single-phase at 30 kVA).\n"
+    ),
+    ("solar", "UK"): (
+        "PRACTICE REFERENCE - United Kingdom, solar PV and batteries (reviewed):\n"
+        "- Electrical: BS 7671:2018+A4:2026, including Section 712 (PV systems) and Chapter 57 (stationary secondary "
+        "batteries). New circuits and consumer unit work in homes are notifiable under Part P (England and Wales); issue "
+        "an Electrical Installation Certificate.\n"
+        "- Grid connection: EREC G98 for generation up to 16 A per phase (notify the DNO within 28 days of commissioning); "
+        "EREC G99 for larger systems or higher export (apply to the DNO and get approval BEFORE connecting).\n"
+        "- MCS certification (MIS 3002 for PV, MIS 3012 for batteries) is needed for most Smart Export Guarantee tariffs "
+        "and government-backed schemes; it is a scheme requirement, not a licence.\n"
+        "- Battery placement (PAS 63100:2024, best practice rather than law): outdoors preferred; not in rooms used for "
+        "sleeping or cupboards opening into them, escape routes, lofts, voids or roof spaces, or within 2 m of fuel or "
+        "flammable material; indoor systems up to 40 kWh, outdoor up to 80 kWh; BS 5839-6 smoke detector where the "
+        "battery is in a rarely visited space.\n"
+    ),
+    ("solar", "US"): (
+        "PRACTICE REFERENCE - United States, solar PV and energy storage (reviewed):\n"
+        "- NEC Article 690 (PV), 705 (interconnected sources), 706 (energy storage systems) and 480 (batteries); cite the "
+        "NEC edition adopted in the state instead of guessing a year. Rooftop PV on buildings needs rapid shutdown "
+        "(NEC 690.12). For a load-side connection to a busbar, the common 120% rule applies (125% of the inverter output "
+        "current plus the main breaker rating must not exceed 120% of the busbar rating, NEC 705.12).\n"
+        "- Energy storage systems must be listed to UL 9540 (NEC 706.5; IRC R328). In homes, ESS may not go in habitable "
+        "space; permitted locations include garages separated from living space, outdoors on an exterior wall at least "
+        "3 ft from doors and windows, and enclosed utility spaces that do not open into a bedroom (IRC R328); NFPA 855 "
+        "sets capacity limits.\n"
+        "- Licensing: a licensed electrician or electrical contractor (some states have a solar-specific licence, e.g. "
+        "California C-46), plus building and electrical permits and the utility's interconnection approval. NABCEP "
+        "certification is voluntary.\n"
     ),
 }
 

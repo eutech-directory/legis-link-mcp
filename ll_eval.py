@@ -82,6 +82,13 @@ CASES = [
      {"COMPLIANT", "INFO"}, r"(?i)conformit", None, "Gas fitting"),
     ("Netherlands", "Can a company without a CO certificate replace my central heating boiler?",
      {"NON_COMPLIANT"}, r"(?i)CO.?(certif|keur)", r"(?i)gas safe", "Gas fitting"),
+    # Solar / Battery (LL-21)
+    ("NSW", "Can a home battery be installed inside a bedroom?",
+     {"NON_COMPLIANT"}, r"5139", None, "Solar / Battery"),
+    ("England", "Do I need to tell the DNO before connecting a 3.6 kW single-phase solar inverter?",
+     {"COMPLIANT", "INFO"}, r"G98", None, "Solar / Battery"),
+    ("California", "Does a new rooftop solar system on a house need rapid shutdown?",
+     {"COMPLIANT", "INFO", "NON_COMPLIANT"}, r"690\.12", None, "Solar / Battery"),
 ]
 
 
