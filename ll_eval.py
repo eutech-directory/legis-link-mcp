@@ -109,6 +109,28 @@ CASES = [
      {"COMPLIANT", "INFO"}, r"(?i)6\s?(ft|feet|foot)", None, "Roofing"),
     ("Ontario", "At what height is fall protection required for roofers?",
      {"COMPLIANT", "INFO"}, r"(?i)3\s?m", None, "Roofing"),
+    # Accuracy pass (LL-24) - the independent reviewer's scenarios
+    ("England", "A commercial workshop has a 230V TN-C-S installation. A 32A Type B MCB protects a 2.5mm2 copper final "
+                "circuit supplying socket outlets. The measured earth fault loop impedance is 1.20 ohm. A 30mA Type A RCD "
+                "is installed. Can you certify this as compliant with BS 7671?",
+     {"REQUIRES_VERIFICATION", "NON_COMPLIANT"}, r"0\.4\s?s", r"(?i)1\.44|category\s?0", "Electrical"),
+    ("England", "A B32 socket circuit has a measured Zs of 0.95 ohm. Is the Zs acceptable?",
+     {"COMPLIANT"}, r"1\.37", r"1\.44", "Electrical"),
+    ("England", "A B32 circuit has a measured Zs of 1.50 ohm. Is the Zs acceptable?",
+     {"NON_COMPLIANT"}, r"1\.37", None, "Electrical"),
+    ("England", "Is 2.5mm2 twin and earth on a 32A breaker OK for a radial socket circuit?",
+     {"NON_COMPLIANT"}, r"(?i)4\s?mm|27\s?A", None, "Electrical"),
+    ("England", "What RCD tests does BS 7671 require at initial verification of a 30mA RCD?",
+     {"COMPLIANT", "INFO"}, r"300\s?ms", r"(?i)5\s?x\s?I.?n\s+(test )?is required|must (also )?be tested at 5", "Electrical"),
+    ("Texas", "Is 10 AWG copper on a 40A breaker OK for a receptacle circuit?",
+     {"NON_COMPLIANT"}, r"240\.4", None, "Electrical"),
+]
+
+
+# (region, task, trade, must NOT say) - RAMS must come back as DRAFT, never COMPLIANT
+DOC_CASES = [
+    ("England", "Electrical installation and inspection of a commercial workshop, 230V single-phase TN-C-S",
+     "Electrical", r"(?i)category\s?0|NFPA\s?70E"),
 ]
 
 
@@ -141,7 +163,25 @@ def main():
         else:
             passed += 1
             print(f"{i:2d} PASS   {region} {trade}: {q}")
-    print(f"\n{passed}/{len(CASES)} passed")
+    total = len(CASES)
+    for region, task, trade, must_not in DOC_CASES:
+        total += 1
+        try:
+            r = httpx.post(URL + "/api/query", json={"question": task, "trade": trade, "region": region,
+                                                     "tool": "generate_rams", "api_key": KEY}, timeout=120)
+            d = r.json()
+        except Exception as e:
+            print(f"   ERROR  RAMS {region}: {e}")
+            continue
+        status = str(d.get("status", "")).upper()
+        text = str(d.get("result", ""))
+        bad = re.search(must_not, text) if must_not else None
+        if r.status_code == 200 and status == "DRAFT" and not bad:
+            passed += 1
+            print(f"   PASS   RAMS {region}: labelled DRAFT")
+        else:
+            print(f"   FAIL   RAMS {region}: status {status or r.status_code}" + (f"; says {bad.group(0)}" if bad else ""))
+    print(f"\n{passed}/{total} passed")
     sys.exit(0 if passed == len(CASES) else 1)
 
 

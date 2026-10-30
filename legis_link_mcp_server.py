@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.22.0"
+VERSION           = "3.23.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -2126,14 +2126,14 @@ Return ONLY this JSON, no other text:
 Perform the requested technical calculation. Show: numerical result with units, formula or method used, relevant code reference, any derating factors.
 Use correct regional standards and units: mm² for AU/UK/EU, AWG for USA. Be precise.
 Return ONLY this JSON, no other text:
-{"status": "COMPLIANT", "result": "calculation result and working", "code_reference": "standard + section"}""",
+{"status": "INFO|COMPLIANT|NON_COMPLIANT|REQUIRES_VERIFICATION", "result": "calculation result and working (status INFO unless the question asks whether something complies)", "code_reference": "standard + section"}""",
 
     "safety": SAFETY_CORE + """You are a construction safety expert.
 Generate a numbered safety checklist. Each item must include the requirement, control measure, and regulation reference.
 Cover: PPE, hazard controls, permits, emergency procedures.
 Regional regs: AU (Safe Work Australia, WHS Act), UK (CDM 2015, HSE, PUWER), USA (OSHA 29 CFR 1926), EU (Directive 92/57/EEC).
 Return ONLY this JSON, no other text:
-{"status": "COMPLIANT", "result": "numbered checklist with reg refs", "code_reference": "primary regulation"}""",
+{"status": "DRAFT", "result": "numbered checklist with reg refs", "code_reference": "primary regulation"}""",
 
     "rams": SAFETY_CORE + """You are a construction RAMS expert. Generate a professional document with:
 SECTION 1 — HAZARD REGISTER: table with Hazard | Severity(1-5) | Likelihood(1-5) | Risk Rating | Control Measure | Regulation
@@ -2141,7 +2141,7 @@ SECTION 2 — METHOD STATEMENT: numbered steps
 SECTION 3 — REQUIRED QUALIFICATIONS & CERTIFICATIONS
 Regional terminology: UK/AU=RAMS, USA=Job Hazard Analysis (JHA), EU=Method Statement.
 Return ONLY this JSON, no other text:
-{"status": "COMPLIANT", "result": "full document text", "code_reference": "regulations cited"}""",
+{"status": "DRAFT", "result": "full document text", "code_reference": "regulations cited"}""",
 
     "material": SAFETY_CORE + """You are a construction materials compliance expert.
 Check if the material meets local code. Return COMPLIANT, NON_COMPLIANT, or REQUIRES_VERIFICATION.
@@ -2543,6 +2543,21 @@ _ANSWER_RULES = (
     "- A PRACTICE REFERENCE below has been reviewed and is authoritative for common practice: do not contradict it.\n"
     "- Cite standards ONLY by the editions named in the PRACTICE REFERENCE or verified data. Never invent or change an "
     "edition year; if no edition is given, name the standard without a year.\n"
+    "- VERDICTS: COMPLIANT only when the facts given (or the normal case set out in the PRACTICE REFERENCE) meet "
+    "every rule that decides the outcome. NON_COMPLIANT when the facts given break a rule. REQUIRES_VERIFICATION when a "
+    "missing fact would flip the verdict between common configurations (e.g. ring or radial) or a measurement is "
+    "borderline: then give the answer for EACH realistic case and list ONLY the missing facts that change the verdict. "
+    "Read the facts already given (a circuit supplying socket-outlets IS a final circuit) instead of asking about them.\n"
+    "- NUMBERS: use numeric limits ONLY from VERIFIED CALCULATIONS, VERIFIED LICENSING DATA or the PRACTICE REFERENCE, "
+    "exactly as given. If another figure is needed, name the table or clause that holds it and do not state a value. "
+    "Never quote a value from a superseded edition. When a measured value is given, compare it with the verified "
+    "limit and say PASS, FAIL or BORDERLINE explicitly.\n"
+    "- SCOPE: keep law, standard and guidance distinct (e.g. UK: Electricity at Work Regulations 1989 = law; BS 7671 = "
+    "standard; IET On-Site Guide and GN3 = guidance). Never borrow another country's concepts: NFPA 70E arc-flash PPE "
+    "categories, OSHA and the NEC are US-only; Part P, Gas Safe, G98/G99 and MCS are UK-only; ARC/ARCtick are "
+    "Australian; RGI and Safe Electric are Irish.\n"
+    "- DOCUMENTS (RAMS, checklists, method statements) are DRAFTS for a competent person to review for the specific "
+    "site: never describe a document as compliant, and list the project information still needed.\n"
     "- LANGUAGE: write the whole answer in English, for every country (Czech Republic, Germany, France and so on). "
     "Keep official names of laws, standards and bodies as published (e.g. CSN 33 2000, Handwerksordnung, NF C 15-100) "
     "and add a short English explanation in brackets the first time. Only answer in another language if the user's "
@@ -2581,9 +2596,9 @@ _PRACTICE = {
         "- EDITION TO CITE (always exactly this): BS 7671:2018+A4:2026 (IET Wiring Regulations; Amendment 4 published "
         "15 April 2026; the +A2:2022+A3:2024 version was withdrawn in October 2026). In England and Wales, Building Regulations "
         "Part P applies to notifiable domestic electrical work.\n"
-        "- 2.5 mm2 twin and earth (T&E) is the standard cable for a 32 A ring final circuit and for a 20 A radial "
-        "circuit (standard circuit arrangements in the IET On-Site Guide). In typical installation methods (clipped "
-        "direct, or in a stud wall not surrounded by insulation) it is COMPLIANT in the typical case.\n"
+        "- 2.5 mm2 twin and earth (T&E) is the standard cable for a 32 A RING final circuit and for a 20 A RADIAL "
+        "circuit (standard circuit arrangements in the IET On-Site Guide). A 32 A RADIAL needs 4 mm2 - 2.5 mm2 T&E "
+        "carries 27 A at most. If the question does not say ring or radial for 2.5 mm2 on 32 A, answer both cases.\n"
         "- What changes the answer: contact with or enclosure in thermal insulation (installation reference methods "
         "with heavy derating), grouping, high ambient temperature, and voltage drop on long runs.\n"
         "- Voltage drop (installations supplied from the public LV network): 3% for lighting and 5% for other uses (BS 7671 Appendix 4).\n"
@@ -3169,6 +3184,34 @@ _PRACTICE = {
     ),
 }
 
+# LL-24: safety notes added to every country's electrical reference
+_LL_PPE = {
+    "AU": "- Safe work: AS/NZS 4836 (safe working on or near low-voltage installations) and state WHS/electrical safety laws; "
+          "work de-energised; select PPE by risk assessment. NFPA 70E arc-flash 'categories' are a US concept - do not use them.\n"
+          "- Automatic disconnection (AS/NZS 3000): 0.4 s for final subcircuits supplying socket-outlets, lighting and hand-held "
+          "or portable equipment; 5 s is allowed for submains and certain fixed-equipment circuits - confirm the clause wording "
+          "for the circuit. Read maximum Zs for the protective device from AS/NZS 3000 Table 8.1; do not quote a value unless "
+          "it is given here.\n",
+    "UK": "- Safe isolation: identify, isolate, secure (lock off), prove the voltage indicator, test dead on all conductors, "
+          "re-prove (HSE GS38 for test equipment; Electricity at Work Regulations 1989; HSE HSG85). Work dead; live work only "
+          "where Reg 14 conditions are met. Select PPE by risk assessment - NFPA 70E arc-flash categories are a US concept.\n"
+          "- Clip spacing and similar figures in the On-Site Guide are guidance, not BS 7671 requirements.\n",
+    "US": "- Electrical safe work practices: NFPA 70E (arc-flash risk assessment and PPE categories) and OSHA 1910.333 / "
+          "1926.417 lockout/tagout.\n",
+    "CA": "- Electrical safe work: CSA Z462 (workplace electrical safety, the Canadian arc-flash standard) and provincial OHS "
+          "lockout rules.\n",
+}
+_LL_EU_ADS = ("- Automatic disconnection follows the national implementation of HD 60364-4-41 (TN, 230 V: 0.4 s for final circuits "
+              "up to 63 A with socket-outlets and up to 32 A fixed equipment, 5 s for distribution circuits; TT: 0.2 s). Many "
+              "dwellings in France, Spain and Italy are TT systems where shock protection relies on 30 mA RCDs. Work dead "
+              "(EN 50110-1 safe isolation) and select PPE by risk assessment - NFPA 70E categories are a US concept.\n")
+for _cc, _txt in _LL_PPE.items():
+    if ("electrical", _cc) in _PRACTICE:
+        _PRACTICE[("electrical", _cc)] += _txt
+for _cc in ("IE", "DE", "FR", "ES", "IT", "NL"):
+    if ("electrical", _cc) in _PRACTICE:
+        _PRACTICE[("electrical", _cc)] += _LL_EU_ADS
+
 # LL-9: EU countries map to their own practice references
 _EU_COUNTRIES = {"IRELAND": "IE", "REPUBLIC OF IRELAND": "IE", "EIRE": "IE", "GERMANY": "DE", "DEUTSCHLAND": "DE",
                  "FRANCE": "FR", "SPAIN": "ES", "ESPANA": "ES", "ITALY": "IT", "ITALIA": "IT",
@@ -3203,6 +3246,175 @@ def _region_country(region: str) -> str:
     return _EU_COUNTRIES.get(r, "")
 
 
+# LL-24: verified calculations computed in code (not by the AI) and injected as authoritative data
+_UK_CURVE_K = {"B": 5, "C": 10, "D": 20}
+# BS 7671 Table 4D5 (70 C thermoplastic flat twin and earth): size -> (mV/A/m, Iz Method C clipped direct, Iz Method 100)
+_UK_TE = {1.0: (44, 16, 13), 1.5: (29, 20, 16), 2.5: (18, 27, 21), 4.0: (11, 37, 27), 6.0: (7.3, 47, 34),
+          10.0: (4.4, 64, 45), 16.0: (2.8, 85, 57)}
+# NEC Table 310.16 copper ampacity (60 C, 75 C, 90 C) and circular mils
+_US_AMP = {"14": (15, 20, 25), "12": (20, 25, 30), "10": (30, 35, 40), "8": (40, 50, 55), "6": (55, 65, 75),
+           "4": (70, 85, 95), "3": (85, 100, 115), "2": (95, 115, 130), "1": (110, 130, 145),
+           "1/0": (125, 150, 170), "2/0": (145, 175, 195), "3/0": (165, 200, 225), "4/0": (195, 230, 260)}
+_US_CM = {"14": 4110, "12": 6530, "10": 10380, "8": 16510, "6": 26240, "4": 41740, "3": 52620, "2": 66360,
+          "1": 83690, "1/0": 105600, "2/0": 133100, "3/0": 167800, "4/0": 211600}
+_US_240_4D = {"14": 15, "12": 20, "10": 30}
+
+
+def _ll_num(s):
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def _ll_find_breaker(q):
+    m = re.search(r"\b([BCD])\s?-?\s?(\d{1,3})\s?A?\b", q)
+    if m and int(m.group(2)) in (6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125):
+        return m.group(1).upper(), int(m.group(2))
+    m = re.search(r"\b(\d{1,3})\s?A\b[^.;\n]{0,25}?\b(?:type|curve)\s?([BCD])\b", q, re.I)
+    if m:
+        return m.group(2).upper(), int(m.group(1))
+    m = re.search(r"\b(?:type|curve)\s?([BCD])\b[^.;\n]{0,25}?\b(\d{1,3})\s?A\b", q, re.I)
+    if m:
+        return m.group(1).upper(), int(m.group(2))
+    return None
+
+
+def _ll_calc_uk(q):
+    out = []
+    ql = q.lower()
+    br = _ll_find_breaker(q)
+    zs_m = re.search(r"(?:zs|loop impedance|earth fault loop)[^0-9]{0,40}?(\d+(?:\.\d+)?)\s*(?:ohm|Ω)", q, re.I)
+    zs = _ll_num(zs_m.group(1)) if zs_m else None
+    rcd_m = re.search(r"\b(10|30|100|300|500)\s?mA\b", q, re.I)
+    mm = re.search(r"(\d+(?:\.\d+)?)\s?mm(?:2|²|\^2| sq)", q, re.I)
+    size = _ll_num(mm.group(1)) if mm else None
+    sockets = bool(re.search(r"socket|outlet|ring|radial", ql))
+    if br:
+        curve, In = br
+        zmax = "%.2f" % (230 * 0.95 / (_UK_CURVE_K[curve] * In))
+        z80 = "%.2f" % (float(zmax) * 0.8)
+        out.append(f"- Device: Type {curve} {In} A circuit-breaker (BS EN 60898).")
+        out.append(f"- Maximum Zs at 0.4 s, BS 7671 Table 41.3 (Uo 230 V, Cmin 0.95): {zmax} ohm"
+                   + (" (Type B and C values are the same for 5 s)." if curve in "BC" else "."))
+        out.append(f"- Rule-of-thumb for readings taken at ambient temperature (IET GN3, 80%): {z80} ohm. A reading at or "
+                   f"below this passes; between {z80} and {zmax} ohm the rule cannot confirm compliance and the "
+                   f"Appendix 3 temperature correction (Reg 411.4.203) must be applied; above {zmax} ohm fails.")
+        if In <= 63:
+            out.append("- Disconnection time in a TN system, Uo 230 V (Reg 411.3.2.2, Table 41.1): 0.4 s for final circuits "
+                       "up to 63 A with socket-outlets and up to 32 A supplying only fixed equipment. 5 s applies only to "
+                       "distribution circuits and to final circuits outside those limits (Reg 411.3.2.3). A circuit "
+                       "supplying socket-outlets IS a final circuit - do not apply 5 s to it.")
+        if zs is not None:
+            if zs <= float(z80):
+                v = f"PASS - {zs} ohm is at or below the 80% figure ({z80} ohm)."
+            elif zs <= float(zmax):
+                v = (f"BORDERLINE - {zs} ohm is below the tabulated {zmax} ohm but above the 80% figure ({z80} ohm): "
+                     "cannot be confirmed without temperature correction (Reg 411.4.203 / Appendix 3).")
+            else:
+                v = f"FAIL - {zs} ohm exceeds the tabulated maximum of {zmax} ohm for the circuit-breaker."
+            out.append("- Measured Zs check against the circuit-breaker: " + v)
+    if rcd_m:
+        ma = int(rcd_m.group(1))
+        out.append(f"- RCD {ma} mA: where the RCD is relied on for fault protection (Reg 411.4.5 in TN; 411.5.3 in TT), "
+                   f"maximum Zs = 50 V / IΔn = {round(50 / (ma / 1000))} ohm (Table 41.5); values above 200 ohm may not "
+                   "be stable. A 30 mA RCD also gives the additional protection required for socket-outlets up to 32 A "
+                   "(Reg 411.3.3) and for cables concealed in walls less than 50 mm deep (Reg 522.6.202).")
+        out.append("- RCD testing since BS 7671 A2:2022 (Reg 643.7.3): one test at the rated residual current IΔn; a "
+                   "general (non-delayed) RCD must disconnect within 300 ms (S-type 130-500 ms). The 0.5x, 5x and 180-degree "
+                   "tests are no longer required by BS 7671 (optional good practice only). Use the test button for the "
+                   "functional check.")
+        out.append("- RCD types: AC (sinusoidal residual current only - limited by Reg 531.3.3 to fixed equipment known to "
+                   "produce no DC component), A (AC plus pulsating DC), F (A plus mixed-frequency, for single-phase "
+                   "inverter loads), B (adds smooth DC - e.g. some EV chargers, three-phase drives, PV). Choose by the "
+                   "equipment's residual-current characteristics and the manufacturer's instructions.")
+    if size in _UK_TE:
+        mv, izc, iz100 = _UK_TE[size]
+        out.append(f"- {size:g} mm2 flat twin and earth, BS 7671 Table 4D5: Iz {izc} A clipped direct (Reference Method C), "
+                   f"{iz100} A above a plasterboard ceiling with insulation up to 100 mm (Method 100); lower again in "
+                   f"thermal insulation (Methods 101-103). Voltage drop {mv} mV/A/m. Correction factors for ambient "
+                   "temperature, grouping and insulation apply (Appendix 4).")
+        if br:
+            In = br[1]
+            out.append(f"- Overload rule Ib <= In <= Iz (Reg 433.1.1): a radial circuit on {In} A needs Iz of at least {In} A "
+                       "after correction factors.")
+            if size == 2.5 and In in (30, 32):
+                out.append("- 2.5 mm2 on 32 A: COMPLIANT as a ring final circuit (BS 7671 Appendix 15 / On-Site Guide: "
+                           "2.5 mm2 ring on 30/32 A, ring cable Iz at least 20 A). NOT compliant as a radial: 2.5 mm2 twin "
+                           "and earth carries 27 A at most even clipped direct, below 32 A (use 4 mm2 for a 32 A radial, or "
+                           "2.5 mm2 radials on 20 A, per On-Site Guide). If ring or radial is not stated, give both answers.")
+            elif In > izc:
+                out.append(f"- {size:g} mm2 twin and earth (max Iz {izc} A, Method C) cannot be protected against overload "
+                           f"by a {In} A device as a radial circuit.")
+        amps = re.search(r"(\d+(?:\.\d+)?)\s?A\s*(?:load|design current|demand|draw)", q, re.I)
+        dist = re.search(r"(\d+(?:\.\d+)?)\s?(?:m|metres|meters)\b(?!m)", q, re.I)
+        if amps and dist:
+            ib, L = float(amps.group(1)), float(dist.group(1))
+            vd = round(mv * ib * L / 1000, 2)
+            out.append(f"- Voltage drop: {mv} x {ib:g} A x {L:g} m / 1000 = {vd} V ({round(vd / 230 * 100, 1)}% of 230 V). "
+                       "Limits from a public supply (Appendix 4, Table 4Ab): 3% (6.9 V) lighting, 5% (11.5 V) other uses.")
+    if sockets and not br and not rcd_m and size is None:
+        return []
+    if out:
+        out.append("- Safe isolation (HSE GS38 test equipment, Electricity at Work Regulations 1989 Reg 12-14): identify the "
+                   "circuit, isolate, secure/lock off, prove the voltage indicator on a known source, test dead on all "
+                   "conductors, re-prove the indicator. Work dead; live testing only where unavoidable and justified.")
+    return out
+
+
+def _ll_calc_us(q):
+    out = []
+    awg = re.search(r"\b(14|12|10|8|6|4|3|2|1|1/0|2/0|3/0|4/0)\s?(?:AWG|ga(?:uge)?)\b", q, re.I)
+    brk = re.search(r"\b(15|20|25|30|35|40|45|50|60|70|80|90|100|110|125|150|175|200)\s?-?\s?(?:A|amp|amps)\b", q, re.I)
+    if awg:
+        g = awg.group(1)
+        a60, a75, a90 = _US_AMP[g]
+        out.append(f"- {g} AWG copper, NEC Table 310.16: {a60} A (60 C column), {a75} A (75 C), {a90} A (90 C). NM-B cable "
+                   "is limited to the 60 C column (334.80); terminations usually limit to 60 C or 75 C (110.14(C)).")
+        if g in _US_240_4D:
+            out.append(f"- NEC 240.4(D): {g} AWG copper maximum overcurrent protection {_US_240_4D[g]} A (unless a specific "
+                       "exception applies, e.g. motor circuits).")
+            if brk:
+                b = int(brk.group(1))
+                verdict = "COMPLIANT" if b <= _US_240_4D[g] else "NON_COMPLIANT"
+                out.append(f"- {g} AWG on a {b} A breaker: {verdict} under 240.4(D) for a general branch circuit.")
+        amps = re.search(r"(\d+(?:\.\d+)?)\s?A\s*(?:load|draw|demand)", q, re.I)
+        ft = re.search(r"(\d+(?:\.\d+)?)\s?(?:ft|feet|foot)\b", q, re.I)
+        volts = re.search(r"\b(120|208|240|277|480)\s?V\b", q, re.I)
+        if amps and ft:
+            i, L = float(amps.group(1)), float(ft.group(1))
+            vd = round(2 * 12.9 * i * L / _US_CM[g], 2)
+            v = int(volts.group(1)) if volts else 120
+            out.append(f"- Voltage drop (single-phase, K = 12.9 for copper): 2 x 12.9 x {i:g} A x {L:g} ft / {_US_CM[g]} cmil "
+                       f"= {vd} V ({round(vd / v * 100, 1)}% of {v} V). NEC informational notes suggest 3% branch / 5% total "
+                       "(a recommendation, not a requirement).")
+    return out
+
+
+def _ll_verified_calcs(user_message: str) -> str:
+    """Numbers computed by code from published tables, injected as authoritative data for the AI to use exactly."""
+    try:
+        m = re.match(r"\s*Trade:\s*([^|\n]+?)\s*\|\s*Region:\s*([^|\n]+)", user_message or "")
+        if not m or m.group(1).strip().lower() != "electrical":
+            return ""
+        country = _region_country(m.group(2))
+        if country == "UK":
+            lines = _ll_calc_uk(user_message)
+            src = "BS 7671:2018+A4:2026"
+        elif country == "US":
+            lines = _ll_calc_us(user_message)
+            src = "the NEC (NFPA 70)"
+        else:
+            return ""
+        if not lines:
+            return ""
+        return ("\n\nVERIFIED CALCULATIONS (computed by Legis-Link code from " + src + " tables - use these numbers "
+                "exactly, never substitute other values; state any assumption you add):\n" + "\n".join(lines))
+    except Exception as e:
+        logging.warning(f"verified calcs failed: {e}")
+        return ""
+
+
 def _practice_for(user_message: str) -> str:
     """Answer rules for every tool, plus the reviewed practice reference for the trade and country."""
     m = re.match(r"\s*Trade:\s*([^|\n]+?)\s*\|\s*Region:\s*([^|\n]+)", user_message or "")
@@ -3212,10 +3424,20 @@ def _practice_for(user_message: str) -> str:
         ref = _PRACTICE.get((_TRADE_ALIAS.get(t, t), _region_country(m.group(2))))
         if ref:
             extra = "\n\n" + ref
-    return _ANSWER_RULES + extra
+    return _ANSWER_RULES + extra + _ll_verified_calcs(user_message)
 
 
 async def ask_claude(system_prompt: str, user_message: str) -> dict:
+    """LL-24: one place to finalise every AI answer (documents are drafts, never 'compliant')."""
+    result = await _ask_claude_raw(system_prompt, user_message)
+    if isinstance(result, dict) and ("You are a construction RAMS expert" in system_prompt
+                                     or "Generate a numbered safety checklist" in system_prompt):
+        if result.get("status") not in ("ERROR",):
+            result["status"] = "DRAFT"
+    return result
+
+
+async def _ask_claude_raw(system_prompt: str, user_message: str) -> dict:
     """Call Anthropic API. Falls back to OpenAI on billing errors."""
     system_prompt = system_prompt + _practice_for(user_message)
     async with httpx.AsyncClient(timeout=45.0) as client:
@@ -3623,6 +3845,7 @@ async def get_daily_toolbox_localized(trade: str, region: str) -> dict:
 async def ask_claude_vision(system_prompt: str, user_message: str,
                             image_b64: str, media_type: str = "image/jpeg") -> dict:
     """Call Claude vision API with image for visual compliance checking."""
+    system_prompt = system_prompt + _practice_for(user_message)
     if len(image_b64) > 1_400_000:
         return {"status": "ERROR", "result": "Image too large. Resize under 1MB.", "code_reference": ""}
     async with httpx.AsyncClient(timeout=60.0) as client:
