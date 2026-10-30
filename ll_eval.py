@@ -4,7 +4,7 @@ Legis-Link known-answer test set. Asks the live server questions whose correct a
 well established and checks the verdict. Run it after every prompt or model change.
 
     python ll_eval.py                      (free tier, uses about 14 of your 50 daily questions)
-    $env:LL_KEY="your admin key"; python ll_eval.py   (no daily limit)
+    $env:LL_KEY="ll_p_..."; python ll_eval.py   (Pro key)
 
 Needs: pip install httpx
 """
@@ -14,10 +14,10 @@ import sys
 
 import httpx
 
-URL = os.environ.get("LL_URL", "https://legis-link-mcp-production-3e9b.up.railway.app").rstrip("/")
+URL = os.environ.get("LL_URL", "https://legis-link.com").rstrip("/")
 KEY = os.environ.get("LL_KEY", "")
 
-# (region, question, statuses accepted, must mention (regex, any), must NOT say (regex))
+# (region, question, statuses accepted, must mention (regex, any), must NOT say (regex)[, trade])
 CASES = [
     ("NSW", "Is 2.5mm2 TPS cable OK for a 20A circuit in a wall cavity?",
      {"COMPLIANT"}, r"insulat", r"(?i)\b(use|upgrade to|minimum( of)?|requires?)\s+(a\s+)?4\s?mm"),
@@ -47,14 +47,44 @@ CASES = [
      {"COMPLIANT"}, None, None),
     ("NSW", "Does ordinary TPS in a plasterboard wall cavity need fire-rated cable?",
      {"COMPLIANT", "INFO"}, None, r"(?i)must use fire.?rated cable"),
+    # Plumbing and gas (LL-14)
+    ("NSW", "What is the maximum hot water temperature allowed at the basin in a new bathroom in a house?",
+     {"COMPLIANT", "INFO"}, r"(?<!\d)50(?!\d)", None, "Plumbing"),
+    ("NSW", "Can a new hot water storage heater be set to store water at 50 degrees C?",
+     {"NON_COMPLIANT"}, r"60", None, "Plumbing"),
+    ("VIC", "What is the minimum grade for a DN100 sanitary drain?",
+     {"COMPLIANT", "INFO"}, r"1\.65|1\s?:\s?60", None, "Plumbing"),
+    ("England", "What is the maximum hot water temperature at the bath in a new-build house?",
+     {"COMPLIANT", "INFO"}, r"48", None, "Plumbing"),
+    ("England", "Can an unregistered handyman replace the gas hob in a rented flat?",
+     {"NON_COMPLIANT"}, r"(?i)gas safe", None, "Gas fitting"),
+    ("Texas", "What is the minimum slope for a 2 inch horizontal drain pipe?",
+     {"COMPLIANT", "INFO"}, r"1/4|0?\.25|2\s?%", None, "Plumbing"),
+    ("NSW", "Which standard covers a new natural gas installation in a house?",
+     {"COMPLIANT", "INFO"}, r"5601", None, "Gas fitting"),
+    # Canada and EU (LL-18)
+    ("Ontario", "What is the maximum water temperature allowed at a shower head in a new house?",
+     {"COMPLIANT", "INFO"}, r"(?<!\d)49(?!\d)", None, "Plumbing"),
+    ("Ontario", "What is the minimum slope for a 3 inch horizontal drain pipe?",
+     {"COMPLIANT", "INFO"}, r"1\s?(in|:)\s?50|2\s?%|1/4", None, "Plumbing"),
+    ("Alberta", "Which code covers installing a natural gas furnace?",
+     {"COMPLIANT", "INFO"}, r"B149", r"(?i)NFPA\s?54|IFGC", "Gas fitting"),
+    ("Ireland", "Can a plumber who is not an RGI connect a new gas boiler in a house?",
+     {"NON_COMPLIANT"}, r"(?i)RGI|Registered Gas Installer", r"(?i)gas safe register", "Gas fitting"),
+    ("France", "What is the maximum hot water temperature at a new bathroom basin?",
+     {"COMPLIANT", "INFO"}, r"(?<!\d)50(?!\d)", None, "Plumbing"),
+    ("Germany", "Which technical rules apply to a new gas installation in a house?",
+     {"COMPLIANT", "INFO"}, r"TRGI|G\s?600", None, "Gas fitting"),
 ]
 
 
 def main():
     passed = 0
-    for i, (region, q, ok_status, must, must_not) in enumerate(CASES, 1):
+    for i, case in enumerate(CASES, 1):
+        region, q, ok_status, must, must_not = case[:5]
+        trade = case[5] if len(case) > 5 else "Electrical"
         try:
-            r = httpx.post(URL + "/api/query", json={"question": q, "trade": "Electrical", "region": region,
+            r = httpx.post(URL + "/api/query", json={"question": q, "trade": trade, "region": region,
                                                      "tool": "check_compliance", "api_key": KEY}, timeout=90)
             d = r.json()
         except Exception as e:
@@ -73,10 +103,10 @@ def main():
         if must_not and re.search(must_not, text):
             problems.append("says something wrong: " + re.search(must_not, text).group(0))
         if problems:
-            print(f"{i:2d} FAIL   {region}: {q}\n    " + "; ".join(problems))
+            print(f"{i:2d} FAIL   {region} {trade}: {q}\n    " + "; ".join(problems))
         else:
             passed += 1
-            print(f"{i:2d} PASS   {region}: {q}")
+            print(f"{i:2d} PASS   {region} {trade}: {q}")
     print(f"\n{passed}/{len(CASES)} passed")
     sys.exit(0 if passed == len(CASES) else 1)
 

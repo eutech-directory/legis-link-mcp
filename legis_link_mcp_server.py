@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.16.1"
+VERSION           = "3.17.0"
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
 _PAGES = {
@@ -2304,6 +2304,85 @@ _PRACTICE = {
         "(in Texas, the Railroad Commission).\n"
         "- Gas piping work generally needs a licensed plumber or gas fitter and a permit with inspection and a pressure "
         "test before the gas is turned on. Follow the manufacturer's instructions and the adopted code for CSST bonding.\n"
+    ),
+    # LL-18: plumbing and gas practice references (Canada, Ireland, Germany, France)
+    ("plumbing", "CA"): (
+        "PRACTICE REFERENCE - Canada, plumbing (reviewed):\n"
+        "- Code: the National Plumbing Code of Canada as adopted by the province. Ontario: the 2024 Ontario Building Code "
+        "(O. Reg. 163/24, in force 1 January 2025), Part 7 Plumbing. British Columbia: the BC Plumbing Code. Alberta: the "
+        "National Plumbing Code - Alberta Edition. Name the provincial code; do not guess an edition year for BC or Alberta.\n"
+        "- Hot water from a shower head or into a bathtub must not exceed 49 C (43 C in health care facilities and retirement "
+        "homes), using a thermostatic, pressure-balancing or combination valve (OBC 7.2.10.7 and the NPC equivalent).\n"
+        "- Minimum slope of horizontal drainage pipe: 3 in (75 mm) and smaller at least 1 in 50 (2%, about 1/4 in per ft); "
+        "a 4 in (100 mm) building drain, building sewer or trap arm may be 1 in 100 (1%); larger drains have flatter grades "
+        "in the code's tables.\n"
+        "- Plumbing work needs a municipal permit and inspection, and a certified plumber (compulsory trade in Ontario and "
+        "Alberta; see the licensing data for BC).\n"
+    ),
+    ("gas", "CA"): (
+        "PRACTICE REFERENCE - Canada, gas (reviewed):\n"
+        "- Code: CSA B149.1 Natural gas and propane installation code (B149.2 for propane storage and handling), adopted by "
+        "each province. Alberta: CSA B149.1:25 in force since 1 March 2026. Ontario (TSSA code adoption document) and BC "
+        "(Technical Safety BC) are moving to B149.1:25; if unsure, write 'the B149.1 edition adopted in <province>'.\n"
+        "- Gas work must be done by a certified gas fitter or gas technician (Ontario: TSSA G.3/G.2/G.1; BC and Alberta: "
+        "Gasfitter Class A or B) working for a licensed or registered contractor, with a permit and inspection where the "
+        "province requires it. Do not say a householder may do their own gas work unless the licensing data says so.\n"
+        "- Give clearances, venting and pipe sizing by naming the relevant B149.1 clause and the appliance manufacturer's "
+        "instructions; do not invent figures.\n"
+    ),
+    ("plumbing", "IE"): (
+        "PRACTICE REFERENCE - Ireland, plumbing (reviewed):\n"
+        "- Building Regulations: Technical Guidance Document G (hygiene, including hot water storage safety) and TGD H "
+        "(drainage); I.S. EN 806 for water installations. Do NOT cite UK Approved Documents or the UK Water Fittings "
+        "Regulations for Ireland.\n"
+        "- No licence is needed to work as a plumber, but any work on gas pipework or appliances needs a Registered Gas "
+        "Installer (RGI).\n"
+        "- Legionella control (HSA guidance): store hot water at 60 C or above and distribute it at 50 C or above; fit "
+        "thermostatic mixing valves where scalding is a risk.\n"
+    ),
+    ("gas", "IE"): (
+        "PRACTICE REFERENCE - Ireland, gas (reviewed):\n"
+        "- Standard: I.S. 813 Domestic gas installations (I.S. 813:2014+A1:2017). Do NOT cite BS 6891 or Gas Safe for Ireland.\n"
+        "- By law only a Registered Gas Installer (RGI) may work on domestic gas installations; the RGI issues a Declaration "
+        "of Conformance / completion certificate. Doing gas work unregistered is an offence prosecuted by the CRU.\n"
+        "- Building Regulations Part J (TGD J) require a carbon monoxide alarm with certain new or replacement combustion "
+        "appliances in dwellings; name TGD J rather than inventing which appliances.\n"
+    ),
+    ("plumbing", "DE"): (
+        "PRACTICE REFERENCE - Germany, plumbing (reviewed):\n"
+        "- Rules: DIN EN 806 and DIN 1988 (drinking water installations), DVGW W 551 (Legionella), the Trinkwasserverordnung "
+        "(TrinkwV), and DIN EN 12056 / DIN 1986-100 for drainage. Do NOT cite UK or US codes for Germany.\n"
+        "- Hot water hygiene (DVGW W 551 / DIN 1988-200): in large systems (store over 400 litres or more than 3 litres of "
+        "pipe between heater and tap) water must leave the heater at 60 C and the circulation return must not fall below "
+        "55 C; 60 C is also recommended for small systems in one- and two-family houses.\n"
+        "- Work on the drinking water installation behind the house connection must be done by a firm entered in the water "
+        "supplier's Installateurverzeichnis (AVBWasserV s.12), run under the Handwerksordnung (Meister).\n"
+    ),
+    ("gas", "DE"): (
+        "PRACTICE REFERENCE - Germany, gas (reviewed):\n"
+        "- Technical rules: DVGW-TRGI 2018 (DVGW G 600) for gas installations in buildings. Do NOT cite UK or US gas codes.\n"
+        "- Gas installations behind the main shut-off may only be installed, changed or maintained by a firm in the gas "
+        "network operator's Installateurverzeichnis (NDAV s.13), run under the Handwerksordnung (Meister).\n"
+        "- New gas appliances and flues are checked by the district chimney sweep (bevollmaechtigter Bezirksschornsteinfeger) "
+        "under the state building code before use; say to confirm the local procedure.\n"
+    ),
+    ("plumbing", "FR"): (
+        "PRACTICE REFERENCE - France, plumbing (reviewed):\n"
+        "- Rules: NF DTU 60.1 / 60.11 (plumbing and sizing), and the arrete du 23 juin 1978 art. 36 as amended by the "
+        "arrete du 30 novembre 2005 (hot water). Do NOT cite UK or US codes for France.\n"
+        "- Hot water in new installations: no more than 50 C at taps in rooms used for washing (bathroom, shower), no more "
+        "than 60 C in other rooms (e.g. kitchen); stores of 400 litres or more must deliver at least 55 C; where the "
+        "distribution pipework holds more than 3 litres, water must stay at 50 C or above except in the last 3 litres "
+        "before each tap.\n"
+        "- The firm needs the qualification professionnelle (CAP/BEP or 3 years' experience) and decennale insurance.\n"
+    ),
+    ("gas", "FR"): (
+        "PRACTICE REFERENCE - France, gas (reviewed):\n"
+        "- Rules: arrete du 2 aout 1977 (domestic gas installations) and NF DTU 61.1. Do NOT cite UK or US gas codes.\n"
+        "- A new or fully renovated gas installation needs a certificat de conformite signed by the installer and endorsed "
+        "by Qualigaz before the distributor supplies gas.\n"
+        "- The firm needs the qualification professionnelle and decennale insurance; the 'PG - Professionnel du Gaz' label is "
+        "voluntary.\n"
     ),
 }
 
