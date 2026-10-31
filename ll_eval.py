@@ -165,9 +165,40 @@ DOC_CASES = [
 ]
 
 
+def _args():
+    import argparse
+    a = argparse.ArgumentParser(description="Legis-Link known-answer test. Each question costs AI credit - "
+                                            "run only what a change can affect.")
+    a.add_argument("--only", help="question numbers to run, e.g. 32,40 or 1-14")
+    a.add_argument("--no-rams", action="store_true", help="skip the RAMS checks (the most expensive part)")
+    a.add_argument("--rams-only", action="store_true", help="run only the RAMS checks")
+    return a.parse_args()
+
+
+def _picked(spec, n):
+    if not spec:
+        return set(range(1, n + 1))
+    out = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if "-" in part:
+            lo, hi = part.split("-", 1)
+            out.update(range(int(lo), int(hi) + 1))
+        elif part:
+            out.add(int(part))
+    return out
+
+
 def main():
+    args = _args()
+    pick = set() if args.rams_only else _picked(args.only, len(CASES))
+    run_rams = not args.no_rams and (args.rams_only or not args.only)
     passed = 0
+    total = 0
     for i, case in enumerate(CASES, 1):
+        if i not in pick:
+            continue
+        total += 1
         region, q, ok_status, must, must_not = case[:5]
         trade = case[5] if len(case) > 5 else "Electrical"
         try:
@@ -204,8 +235,7 @@ def main():
         else:
             passed += 1
             print(f"{i:2d} PASS   {region} {trade}: {q}")
-    total = len(CASES)
-    for region, task, trade, must_not, must_all in DOC_CASES:
+    for region, task, trade, must_not, must_all in (DOC_CASES if run_rams else []):
         total += 1
         try:
             r = httpx.post(URL + "/api/query", json={"question": task, "trade": trade, "region": region,

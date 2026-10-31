@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.26.1"
+VERSION           = "3.27.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -3873,17 +3873,112 @@ _LL_RAMS_PARTS = [
 ]
 
 
+# LL-35: cost control. Sonnet 5.5 thinks by default at high effort, and thinking is billed as output tokens and
+# counts against max_tokens. Questions now use a set effort (LEGIS_EFFORT, default "medium"); document parts (RAMS)
+# skip up-front thinking. The fixed instructions are sent as a cacheable block. Every call logs its token use and
+# estimated cost, and Telegram alerts go out on billing failures and when the day's estimated spend passes
+# LEGIS_DAILY_ALERT_USD (default 10).
+LL_EFFORT = (os.environ.get("LEGIS_EFFORT", "") or "medium").strip().lower()
+try:
+    LL_DAILY_ALERT_USD = float(os.environ.get("LEGIS_DAILY_ALERT_USD", "") or "10")
+except ValueError:
+    LL_DAILY_ALERT_USD = 10.0
+_LL_PRICES = (("sonnet-5", 2.0, 10.0), ("opus-5", 5.0, 25.0), ("haiku", 1.0, 5.0))   # approx. $ per million in / out
+_LL_SPEND = {"day": "", "usd": 0.0, "calls": 0, "alerted": False}
+_LL_ALERTS = {}
+_LL_SERVICE_DOWN = "The answer service is temporarily unavailable. Please try again in a few minutes."
+
+
+async def _ll_alert_send(text: str):
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                              json={"chat_id": TELEGRAM_CHAT_ID, "text": "Legis-Link: " + text})
+    except Exception:
+        pass
+
+
+def _ll_alert(key: str, text: str, every_s: float = 3600.0):
+    """Log and (at most once per key per hour) send a Telegram alert to the owner."""
+    import time as _t, asyncio as _aio
+    now = _t.time()
+    if now - _LL_ALERTS.get(key, 0.0) < every_s:
+        return
+    _LL_ALERTS[key] = now
+    logging.warning("ALERT: " + text)
+    if TELEGRAM_TOKEN:
+        try:
+            _aio.get_running_loop().create_task(_ll_alert_send(text))
+        except Exception:
+            pass
+
+
+def _ll_body(model_name: str, max_tokens: int, system_prompt: str, messages: list, doc: bool = False,
+             plain: bool = False) -> dict:
+    body = {"model": model_name, "max_tokens": max_tokens, "messages": messages}
+    if plain:
+        body["system"] = system_prompt
+        return body
+    body["system"] = [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+    if str(model_name).startswith("claude-sonnet-5"):
+        if doc:
+            body["thinking"] = {"type": "between_tools"}      # no up-front thinking for long documents
+            body["output_config"] = {"effort": "high"}
+        elif LL_EFFORT in ("low", "medium", "high", "xhigh", "max"):
+            body["output_config"] = {"effort": LL_EFFORT}
+    return body
+
+
+def _ll_track_usage(model_name: str, data: dict):
+    import datetime as _d
+    u = data.get("usage") or {}
+    i = int(u.get("input_tokens") or 0)
+    o = int(u.get("output_tokens") or 0)
+    cr = int(u.get("cache_read_input_tokens") or 0)
+    cw = int(u.get("cache_creation_input_tokens") or 0)
+    pin, pout = next(((a, b) for k, a, b in _LL_PRICES if k in str(model_name)), (2.0, 10.0))
+    usd = (i * pin + cw * pin * 1.25 + cr * pin * 0.1 + o * pout) / 1e6
+    today = _d.date.today().isoformat()
+    if _LL_SPEND["day"] != today:
+        _LL_SPEND.update(day=today, usd=0.0, calls=0, alerted=False)
+    _LL_SPEND["usd"] += usd
+    _LL_SPEND["calls"] += 1
+    logging.warning(f"AI usage {model_name}: in={i} cache_read={cr} cache_write={cw} out={o} ~${usd:.4f} "
+                    f"| today ~${_LL_SPEND['usd']:.2f} in {_LL_SPEND['calls']} calls")
+    if _LL_SPEND["usd"] >= LL_DAILY_ALERT_USD and not _LL_SPEND["alerted"]:
+        _LL_SPEND["alerted"] = True
+        _ll_alert("spend", f"estimated AI spend today has passed ${LL_DAILY_ALERT_USD:.0f} "
+                           f"(~${_LL_SPEND['usd']:.2f} in {_LL_SPEND['calls']} calls).", every_s=0)
+
+
+async def _ll_post(client, model_name: str, max_tokens: int, system_prompt: str, messages: list,
+                   doc: bool = False):
+    """Every call to the AI goes through here: cost settings, one safe retry, usage log, billing alert."""
+    headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+    resp = await client.post(ANTHROPIC_URL, headers=headers,
+                             json=_ll_body(model_name, max_tokens, system_prompt, messages, doc))
+    if resp.status_code == 400 and any(w in resp.text for w in ("thinking", "output_config", "effort", "cache_control")):
+        logging.warning(f"{model_name} refused the cost settings, retrying without them: {resp.text[:200]}")
+        resp = await client.post(ANTHROPIC_URL, headers=headers,
+                                 json=_ll_body(model_name, max_tokens, system_prompt, messages, plain=True))
+    if resp.status_code == 200:
+        try:
+            _ll_track_usage(model_name, resp.json())
+        except Exception:
+            pass
+    elif resp.status_code in (400, 402) and ("credit balance" in resp.text or "billing" in resp.text.lower()):
+        _ll_alert("billing", "Anthropic refused a request for billing (credit balance or spend limit). Answers are "
+                             "failing - add credit or raise the limit in the Anthropic Console.")
+    return resp
+
+
 async def _ll_text_call(system_prompt: str, user_message: str, model_name: str, max_tokens: int,
                         timeout_s: float):
     """One plain-text answer: returns (text, stop_reason, error)."""
     try:
         async with httpx.AsyncClient(timeout=timeout_s) as client:
-            resp = await client.post(
-                ANTHROPIC_URL,
-                headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
-                         "content-type": "application/json"},
-                json={"model": model_name, "max_tokens": max_tokens, "system": system_prompt,
-                      "messages": [{"role": "user", "content": user_message}]})
+            resp = await _ll_post(client, model_name, max_tokens, system_prompt,
+                                  [{"role": "user", "content": user_message}], doc=True)   # LL-35
         if resp.status_code != 200:
             return "", "", f"API error {resp.status_code}: {resp.text[:160]}"
         data = resp.json()
@@ -3996,6 +4091,9 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
     elif (isinstance(result, dict) and result.get("status") == "REQUIRES_VERIFICATION"
           and _ll_is_info_question(system_prompt, user_message)):
         result["status"] = "INFO"
+    if isinstance(result, dict) and result.get("status") == "ERROR":   # LL-35: details to the log, not to users
+        logging.warning(f"Answer failed: {str(result.get('result'))[:300]}")
+        result["result"] = _LL_SERVICE_DOWN
     return result
 
 
@@ -4099,20 +4197,8 @@ async def _ask_claude_once(system_prompt: str, user_message: str, model_name: st
                            timeout_s: float = 150.0) -> dict:
     async with httpx.AsyncClient(timeout=timeout_s) as client:
         try:
-            resp = await client.post(
-                ANTHROPIC_URL,
-                headers={
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": model_name,
-                    "max_tokens": max_tokens,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_message}],
-                }
-            )
+            resp = await _ll_post(client, model_name, max_tokens, system_prompt,
+                                  [{"role": "user", "content": user_message}])   # LL-35
             if resp.status_code == 200:
                 # LL-31: newer models can return other blocks (e.g. thinking) before the answer, so content[0] is not
                 # always text. Join every text block instead of reading content[0]["text"].
@@ -4133,6 +4219,8 @@ async def _ask_claude_once(system_prompt: str, user_message: str, model_name: st
                 "credit balance" in error_body or "billing" in error_body.lower()
             ):
                 logging.warning("Anthropic credits exhausted — falling back to OpenAI")
+                if not OPENAI_API_KEY:   # LL-35: no backup configured - a clear message, never a raw error
+                    return {"status": "ERROR", "result": _LL_SERVICE_DOWN, "code_reference": "", "_final": True}
                 r = await _ask_openai(system_prompt, user_message)
                 r["_final"] = True
                 return r
@@ -4520,21 +4608,14 @@ async def ask_claude_vision(system_prompt: str, user_message: str,
         return {"status": "ERROR", "result": "Image too large. Resize under 1MB.", "code_reference": ""}
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
-            resp = await client.post(
-                ANTHROPIC_URL,
-                headers={"x-api-key": ANTHROPIC_API_KEY,
-                         "anthropic-version": "2023-06-01",
-                         "content-type": "application/json"},
-                json={"model": MODEL, "max_tokens": 2048,
-                      "system": system_prompt,
-                      "messages": [{"role": "user", "content": [
+            resp = await _ll_post(client, MODEL, 4096, system_prompt, [   # LL-35
+                      {"role": "user", "content": [
                           {"type": "image", "source": {
                               "type": "base64",
                               "media_type": media_type,
                               "data": image_b64}},
                           {"type": "text", "text": user_message}
-                      ]}]}
-            )
+                      ]}])
             if resp.status_code == 200:
                 return _parse_llm_text("".join(b.get("text", "") for b in (resp.json().get("content") or [])
                                                if isinstance(b, dict) and b.get("type") == "text"))  # LL-33
@@ -4546,7 +4627,7 @@ async def ask_claude_vision(system_prompt: str, user_message: str,
 
 
 def check_free_tier_server(fingerprint, ip):
-    FREE_DAILY = 50
+    FREE_DAILY = FREE_DAILY_LIMIT   # LL-35: one setting (LEGIS_FREE_DAILY) for the web app and MCP
     fp = (fingerprint or ("ip_" + (ip or "unknown")))[:200]
     try:
         with get_db() as conn:
