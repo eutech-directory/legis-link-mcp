@@ -25,9 +25,9 @@ and the conditions that would change the answer.
 - **Cites the edition in force:** AS/NZS 3000:2018, BS 7671:2018+A4:2026, AS/NZS 3500:2025, AS/NZS 5601.1:2022.
   For the NEC and US plumbing codes it names the edition each state has adopted instead of guessing.
 - **Checked licensing data:** who may legally do the work, the licence class, the apprentice route and the
-  contractor licence, for **110 trade-and-region combinations** across 22 jurisdictions.
-- **Tested:** a 21-question known-answer set (electrical, plumbing, gas; AU, UK, US) runs against the live server
-  after every change. Current score: **21 / 21**.
+  contractor licence, for **155+ trade-and-region combinations** across 22 jurisdictions.
+- **Tested:** 59 known-answer checks (57 questions across 10 trades and 5 regions, plus 2 full RAMS documents) run
+  against the live server after every change. Current score: **59 / 59** (31 October 2026).
 
 ## Tools
 
@@ -40,7 +40,7 @@ All tools are **read-only**: they look things up and write text. They never chan
 | **List supported regions** | Free | Jurisdictions covered for a trade |
 | **Calculate a technical spec** | Pro | Cable size, voltage drop, pipe size, heat load |
 | **Generate a safety checklist** | Pro | PPE and hazard controls, each tied to its regulation |
-| **Generate RAMS** | Pro | Risk assessment and method statement in about a minute |
+| **Generate RAMS** | Pro | Draft risk assessment and method statement for review, in a few minutes |
 | **Verify material compliance** | Pro | Will this product pass, before you order it |
 | **Get inspection requirements** | Pro | Hold points, who signs off, which certificate |
 
@@ -105,7 +105,7 @@ Generate a RAMS for a switchboard upgrade in a house in Victoria
 | | Free | Pro |
 |---|---|---|
 | Price | $0 | $199 / year |
-| Questions per day | 50 | 1,000 |
+| Questions per day | 10 | 200 |
 | Tools | 3 | 8 |
 | Toolbox talk PDFs | | ✓ |
 

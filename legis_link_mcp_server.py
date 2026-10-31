@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.27.0"
+VERSION           = "3.27.1"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -311,6 +311,40 @@ def _gumroad_license_check(k: str):
     return ok, reason
 
 
+# LL-36: a test key for the known-answer eval (Railway variable LEGIS_TEST_KEY, at least 24 characters). It works as
+# Pro with its own daily allowance (LEGIS_TEST_DAILY, default 1000), so testing never uses up a customer's or the
+# owner's Pro limit. It opens nothing else (no admin pages).
+LL_TEST_KEY = os.environ.get("LEGIS_TEST_KEY", "").strip()
+try:
+    LL_TEST_DAILY = int(os.environ.get("LEGIS_TEST_DAILY", "") or "1000")
+except ValueError:
+    LL_TEST_DAILY = 1000
+# Shown on the landing page: update with each full eval run.
+_LL_EVAL = {"n": "59", "score": "59/59", "date": "31 Oct 2026"}
+
+
+def _ll_is_test_key(key) -> bool:
+    k = (key or "").strip()
+    return bool(k and len(LL_TEST_KEY) >= 24 and _hmac_mod.compare_digest(k, LL_TEST_KEY))
+
+
+_LL_PAGE_FIXES = [('<p class="hero-note">Free tier: 50 queries/day &bull; No signup &bull; Works on any phone</p>', '<p class="hero-note">Free tier: 50 queries/day &bull; No signup &bull; Works on any phone</p>\n  <p class="hero-note">Tested against __EVAL_N__ known answers after every update &mdash; __EVAL_SCORE__ passed (__EVAL_DATE__)</p>'), ('Wire size for 45A load, 30 metres, 240V single phase NSW', 'Is 2.5mm&sup2; TPS OK for a 20A circuit in a wall cavity? (NSW)'), ('10mm&sup2; copper conductor required. Working: 45A continuous load at 30m on 240V single phase gives 1.97% voltage drop &mdash; within the 3% sub-circuit limit. Installation method (clipped direct, in conduit) may require derating to 16mm&sup2; if bundled.', 'Compliant for a typical installation: 2.5mm&sup2; TPS in an ordinary wall cavity is rated above 20A. Not compliant if the cable is completely surrounded by thermal insulation &mdash; derating then takes it below 20A.'), ('Ref: AS/NZS 3008.1.1:2017 Table C1, AS/NZS 3000:2018 Clause 3.6.2', 'Ref: AS/NZS 3000:2018, AS/NZS 3008.1.1:2017 (current ratings)'), ('Generate a RAMS for electrical switchboard installation', 'Generate a SWMS for a switchboard upgrade in a house (NSW)'), ('<strong>RAMS &mdash; Electrical Switchboard Installation NSW</strong>', '<strong>SWMS (draft) &mdash; Switchboard upgrade, NSW</strong>'), ('Hazard Register: Electric shock (Severity 5, Likelihood 4, Risk 20 CRITICAL) &mdash; Isolate and LOTO main supply, test with approved voltage detector, wear insulated PPE Category 4...', 'Risk assessment: Electric shock (likelihood 3 &times; severity 5 = 15, High) &mdash; work de-energised: isolate, lock off, test for dead with an approved tester checked on a proving unit...'), ('<div class="demo-tag">&#9679; COMPLIANT</div>\n          <div class="demo-ref">Ref: WHS Act 2011 (NSW), AS/NZS 3000:2018, Electrical Safety Code</div>', '<div class="demo-tag">&#9679; DRAFT</div>\n          <div class="demo-ref">Ref: WHS Act 2011 (NSW), WHS Regulation 2017 (NSW), AS/NZS 3000:2018</div>'), ('Full RAMS document generated in 60 seconds', 'Full draft RAMS in a few minutes, ready for your review'), ('Full Risk Assessment and Method Statement: Hazard Register with risk ratings, numbered Method Statement, required qualifications. Print-ready, site-file ready.', 'Draft Risk Assessment and Method Statement: risk assessment with before-and-after ratings, step-by-step method, legal register, emergency procedures and sign-off sheet &mdash; for review by a competent person before use.'), ('BS 7671:2018, CDM 2015', 'BS 7671:2018+A4:2026, CDM 2015'), ('BS 7671:2018 (IET Wiring Regulations)', 'BS 7671:2018+A4:2026 (IET Wiring Regulations)'), ('NCC 2022, WHS Acts', 'NCC, WHS Acts'), ('NSW, VIC, QLD, WA, SA', 'All states and territories'), ('England, Scotland, Wales<', 'England, Scotland, Wales, NI<'), ('Pro features (£199/year)', 'Pro features ($199/year)')]
+
+
+def _ll_fix_pages(html: str) -> str:
+    """LL-36: landing page and app text kept true - sample answers, limits, editions, the tested score."""
+    for a, b in _LL_PAGE_FIXES:
+        html = html.replace(a, b)
+    html = (html.replace("__EVAL_N__", _LL_EVAL["n"]).replace("__EVAL_SCORE__", _LL_EVAL["score"])
+                .replace("__EVAL_DATE__", _LL_EVAL["date"]))
+    free, pro = f"{FREE_DAILY_LIMIT:,}", f"{PRO_DAILY_LIMIT:,}"
+    html = html.replace("Free tier: 50 queries/day", f"Free tier: {free} questions/day")
+    html = html.replace("<li>50 queries/day</li>", f"<li>{free} questions/day</li>")
+    html = html.replace("1,000 queries/day", f"{pro} questions/day")
+    html = html.replace('textContent = "1000/day"', f'textContent = "{PRO_DAILY_LIMIT}/day"')
+    return html
+
+
 def validate_api_key(key: str | None) -> dict:
     """Validate API key. Returns {valid, tier, reason}."""
     if not key or not key.strip():
@@ -318,6 +352,8 @@ def validate_api_key(key: str | None) -> dict:
     k = key.strip()
     if ADMIN_KEY and _hmac_mod.compare_digest(k, ADMIN_KEY):
         return {"valid": True, "tier": "pro", "remaining": 999999, "reason": "admin"}
+    if _ll_is_test_key(k):   # LL-36
+        return {"valid": True, "tier": "pro", "remaining": LL_TEST_DAILY, "reason": "test"}
     if k == "dev_local":
         if DEV_MODE:
             return {"valid": True, "tier": "pro", "reason": "dev"}
@@ -371,6 +407,8 @@ def check_rate_limit(api_key: str, tier: str, who: str = "") -> dict:
     if api_key and ADMIN_KEY and _hmac_mod.compare_digest(api_key.strip(), ADMIN_KEY):
         return {"allowed": True, "remaining": 999999, "limit": 999999}
     limit = PRO_DAILY_LIMIT if tier == "pro" else FREE_DAILY_LIMIT
+    if _ll_is_test_key(api_key):   # LL-36: the eval key has its own allowance
+        limit = LL_TEST_DAILY
     k = (api_key or "").strip()
     ident = k if (k and k != "dev_local") else "anon:" + (who or _LL_CLIENT.get() or "unknown")
     import hashlib as _hs
@@ -4971,7 +5009,7 @@ def run_http():
                 return RedirectResponse("/app")
             html = html.encode("utf-8", errors="replace").decode("utf-8")
             html = html.replace("Live &mdash; 645 compliance checks today", _ll_live_badge())
-            return HTMLResponse(html)
+            return HTMLResponse(_ll_fix_pages(html))   # LL-36
 
         async def handle_health(request):
             key = ANTHROPIC_API_KEY
@@ -5023,7 +5061,7 @@ def run_http():
                 html = "<html><body><h1>Legis-Link</h1><p>App page not found.</p></body></html>"
             # Strip surrogate characters that cause UnicodeEncodeError
             html = html.encode("utf-8", errors="replace").decode("utf-8")
-            return HTMLResponse(html)
+            return HTMLResponse(_ll_fix_pages(html))   # LL-36
 
         async def handle_connect_page(request):
             """MCP client connection guide."""
