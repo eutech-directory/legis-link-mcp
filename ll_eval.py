@@ -159,8 +159,11 @@ def main():
         region, q, ok_status, must, must_not = case[:5]
         trade = case[5] if len(case) > 5 else "Electrical"
         try:
-            r = httpx.post(URL + "/api/query", json={"question": q, "trade": trade, "region": region,
-                                                     "tool": "check_compliance", "api_key": KEY}, timeout=420)
+            payload = {"question": q, "trade": trade, "region": region, "tool": "check_compliance", "api_key": KEY}
+            try:
+                r = httpx.post(URL + "/api/query", json=payload, timeout=420)
+            except httpx.TransportError:
+                r = httpx.post(URL + "/api/query", json=payload, timeout=420)  # one retry (e.g. a redeploy mid-run)
             try:
                 d = r.json()
             except ValueError:

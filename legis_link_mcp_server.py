@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.24.3"
+VERSION           = "3.24.4"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -2935,6 +2935,9 @@ _PRACTICE = {
         "an Electrical Installation Certificate.\n"
         "- Grid connection: EREC G98 for generation up to 16 A per phase (notify the DNO within 28 days of commissioning); "
         "EREC G99 for larger systems or higher export (apply to the DNO and get approval BEFORE connecting).\n"
+        "- A single-phase inverter of up to 3.68 kW (16 A) on its own is G98: no prior approval - install, then the "
+        "installer notifies the DNO within 28 days (answer with status INFO). Adding a battery or more generation can "
+        "take the total over 16 A per phase, which needs G99 approval first - give that as the exception.\n"
         "- MCS certification (MIS 3002 for PV, MIS 3012 for batteries) is needed for most Smart Export Guarantee tariffs "
         "and government-backed schemes; it is a scheme requirement, not a licence.\n"
         "- Battery placement (PAS 63100:2024, best practice rather than law): outdoors preferred; not in rooms used for "
@@ -3697,10 +3700,64 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
 FALLBACK_MODEL = os.environ.get("LEGIS_FALLBACK_MODEL", "") or "claude-haiku-4-5-20251001"
 
 
+# LL-29: every prompt is focused on the user's own country before it is sent - the list of other countries'
+# frameworks, Australia-only naming rules and "do not cite <foreign standard>" lines are removed, because naming a
+# foreign standard (even to exclude it) made answers mention it.
+_LL_FRAMEWORKS = {
+    "AU": "AU (AS/NZS 3000 = wiring/installation & testing, AS/NZS 3008 = cable selection ONLY, NCC; state WHS/electrical safety Acts)",
+    "UK": "UK (BS 7671, CDM 2015, HSE)",
+    "US": "USA (NEC NFPA 70, IBC, OSHA)",
+    "CA": "Canada (CEC CSA C22.1, NBC)",
+}
+
+
+def _ll_focus_country(system_prompt: str, user_message: str) -> str:
+    try:
+        m = re.match(r"\s*Trade:\s*([^|\n]+?)\s*\|\s*Region:\s*([^|\n]+)", user_message or "")
+        country = _region_country(m.group(2)) if m else ""
+        if not country:
+            return system_prompt
+        fw = _LL_FRAMEWORKS.get(country, "this EU country (EN standards as adopted nationally; national law)")
+        system_prompt = re.sub(r"Use correct regional frameworks:.*?\(EN standards; national law\)\.",
+                               "Use ONLY the framework of the user's jurisdiction: " + fw + ".", system_prompt, flags=re.S)
+        if country != "AU":
+            system_prompt = re.sub(r"STANDARD SCOPE & CORRECT NAMES:.*?(?=ANALYSIS:)", "", system_prompt, flags=re.S)
+        system_prompt = re.sub(r"Do NOT (?:cite|use) [^.]*?(?:BS 7671|NEC|UK|US|Gas Safe|G98|MCS|NFPA)[^.]*\.",
+                               "Cite only this country's own laws and standards.", system_prompt)
+        system_prompt = system_prompt.replace("AS/NZS, BS, NEC etc. are technical standards", "national, EN, ISO and IEC standards are technical standards")
+        system_prompt = system_prompt.replace("(AS/NZS, BS, NEC, EN - technical", "(national, EN, ISO and IEC standards - technical")
+        system_prompt = re.sub(r"Never borrow another country's concepts:.*?are Irish\.",
+                               "Never borrow another country's laws, standards, licences or concepts.", system_prompt, flags=re.S)
+        if country != "UK":
+            system_prompt = system_prompt.replace(
+                "(e.g. UK: Electricity at Work Regulations 1989 = law; BS 7671 = standard; IET On-Site Guide and GN3 = guidance)",
+                "(legislation = law; standards = technical rules; industry guides = guidance)")
+        if country != "AU":
+            system_prompt = system_prompt.replace(" (note: AS/NZS standards are copyrighted and not reproduced here)", "")
+            system_prompt = system_prompt.replace("(AS/NZS and similar standards are copyright-protected and not reproduced here)",
+                                                  "(standards are copyright-protected and not reproduced here)")
+        _regs = {"AU": "Safe Work Australia model WHS laws as adopted by the state", "UK": "CDM 2015, HSE, PUWER",
+                 "US": "OSHA 29 CFR 1926", "CA": "the provincial OHS Act and regulations"}
+        system_prompt = re.sub(r"Regional regs: AU \(.*?Directive 92/57/EEC\)\.",
+                               "Regulations: " + _regs.get(country, "the EU Directive 92/57/EEC as implemented in national law") + ".",
+                               system_prompt, flags=re.S)
+        if country != "US":
+            system_prompt = system_prompt.replace("NFPA 70E arc-flash 'categories' are a US concept - do not use them.",
+                                                  "do not use arc-flash 'PPE category' ratings.")
+            system_prompt = system_prompt.replace("Select PPE by risk assessment - NFPA 70E arc-flash categories are a US concept.",
+                                                  "Select PPE by risk assessment; do not use arc-flash 'PPE category' ratings.")
+        if country not in ("UK", "AU", "US"):
+            system_prompt = re.sub(r" ?(?:and )?select PPE by risk assessment - NFPA 70E categories are a US concept\.",
+                                   " and select PPE by risk assessment.", system_prompt)
+        return system_prompt
+    except Exception:
+        return system_prompt
+
+
 async def _ask_claude_raw(system_prompt: str, user_message: str) -> dict:
     """Call Anthropic API with retry and model fallback. Falls back to OpenAI on billing errors."""
     import asyncio as _aio
-    system_prompt = system_prompt + _practice_for(user_message)
+    system_prompt = _ll_focus_country(system_prompt + _practice_for(user_message), user_message)
     is_doc = ("You are a construction RAMS expert" in system_prompt
               or "Generate a numbered safety checklist" in system_prompt
               or "inspection" in system_prompt[:400].lower())
@@ -4144,7 +4201,7 @@ async def get_daily_toolbox_localized(trade: str, region: str) -> dict:
 async def ask_claude_vision(system_prompt: str, user_message: str,
                             image_b64: str, media_type: str = "image/jpeg") -> dict:
     """Call Claude vision API with image for visual compliance checking."""
-    system_prompt = system_prompt + _practice_for(user_message)
+    system_prompt = _ll_focus_country(system_prompt + _practice_for(user_message), user_message)
     if len(image_b64) > 1_400_000:
         return {"status": "ERROR", "result": "Image too large. Resize under 1MB.", "code_reference": ""}
     async with httpx.AsyncClient(timeout=60.0) as client:
