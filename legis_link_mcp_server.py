@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.28.1"
+VERSION           = "3.28.2"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -3753,6 +3753,29 @@ _LL_NOT_INFO_PROMPTS = ("You are a construction RAMS expert", "Generate a number
                         "analysing a site photo", "Check if the material meets local code")
 
 
+# LL-39: "Do I need a licence / Does X need Y / Who is allowed / Must I" asks what the rule is. Nothing has been done
+# yet, so NON_COMPLIANT (which tells the user they broke a rule) is the wrong label: the answer is INFO. Questions that
+# describe work already done ("I used...", "Can I...", "Is this OK...") are not touched.
+_LL_NEED_Q = re.compile(
+    r"^\s*(?:(?:do|does)\b[^?]*?\bneed\b|do (?:i|we|you) have to\b|is (?:a|an|any)\b[^?]*?\b(?:licen[cs]e|permit|"
+    r"certificat\w*|registration|approval)\b[^?]*?\b(?:needed|required)\b|who (?:is|are) (?:allowed|permitted|licensed)\b|"
+    r"who can\b|must (?:i|we)\b|am i (?:allowed|required)\b)", re.I | re.S)
+_LL_DONE_WORDS = re.compile(r"(?i)\b(?:i|we|they|he|she|it|my \w+|the \w+) (?:\w+ ){0,2}?(?:used|installed|fitted|wired|laid|built|put|"
+                            r"poured|connected|replaced|done|did|was|were|is already|are already)\b")
+
+
+def _ll_is_need_question(system_prompt: str, user_message: str) -> bool:
+    try:
+        if any(p in system_prompt for p in _LL_NOT_INFO_PROMPTS):
+            return False
+        m = re.search(r"Question:\s*(.+)", user_message or "", re.S)
+        q = (m.group(1) if m else (user_message or "")).strip()
+        first = q.split("\n")[0]
+        return bool(_LL_NEED_Q.match(first)) and not _LL_DONE_WORDS.search(first)
+    except Exception:
+        return False
+
+
 def _ll_is_info_question(system_prompt: str, user_message: str) -> bool:
     try:
         if any(p in system_prompt for p in _LL_NOT_INFO_PROMPTS):
@@ -4140,6 +4163,9 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
             result["status"] = "DRAFT"
     elif (isinstance(result, dict) and result.get("status") == "REQUIRES_VERIFICATION"
           and _ll_is_info_question(system_prompt, user_message)):
+        result["status"] = "INFO"
+    elif (isinstance(result, dict) and result.get("status") == "NON_COMPLIANT"
+          and _ll_is_need_question(system_prompt, user_message)):   # LL-39
         result["status"] = "INFO"
     if isinstance(result, dict) and result.get("status") == "ERROR":   # LL-35: details to the log, not to users
         logging.warning(f"Answer failed: {str(result.get('result'))[:300]}")
@@ -5274,6 +5300,8 @@ def run_http():
                             _ns = re.sub(r"[\s\-]+", "_", str(parsed.get("status", "COMPLIANT")).strip()).upper()
                             if _ns == "REQUIRES_VERIFICATION" and _ll_is_info_question(SYSTEM_PROMPTS[prompt_key], user_msg):
                                 _ns = "INFO"
+                            elif _ns == "NON_COMPLIANT" and _ll_is_need_question(SYSTEM_PROMPTS[prompt_key], user_msg):
+                                _ns = "INFO"   # LL-39
                             result["status"] = _ns
                         if not result.get("code_reference"):
                             refs = parsed.get("key_standards_and_regulations", [])
