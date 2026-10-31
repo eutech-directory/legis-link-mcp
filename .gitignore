@@ -17,3 +17,7 @@ node_modules/
 legis-link-videos/
 package-lock.json
 node_modules/
+ll*_*.py
+
+mcp-registry-key.txt
+mcp-publisher.exe
