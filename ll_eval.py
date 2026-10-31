@@ -161,7 +161,11 @@ def main():
         try:
             r = httpx.post(URL + "/api/query", json={"question": q, "trade": trade, "region": region,
                                                      "tool": "check_compliance", "api_key": KEY}, timeout=420)
-            d = r.json()
+            try:
+                d = r.json()
+            except ValueError:
+                print(f"{i:2d} ERROR  {region}: {q}\n    HTTP {r.status_code}, not JSON: {r.text[:150]!r}")
+                continue
         except Exception as e:
             print(f"{i:2d} ERROR  {region}: {q}\n    {e}")
             continue
@@ -191,7 +195,11 @@ def main():
         try:
             r = httpx.post(URL + "/api/query", json={"question": task, "trade": trade, "region": region,
                                                      "tool": "generate_rams", "api_key": KEY}, timeout=420)
-            d = r.json()
+            try:
+                d = r.json()
+            except ValueError:
+                print(f"   ERROR  RAMS {region}: HTTP {r.status_code}, not JSON: {r.text[:150]!r}")
+                continue
         except Exception as e:
             print(f"   ERROR  RAMS {region}: {e}")
             continue

@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.24.1"
+VERSION           = "3.24.2"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -2548,6 +2548,10 @@ _ANSWER_RULES = (
     "missing fact would flip the verdict between common configurations (e.g. ring or radial) or a measurement is "
     "borderline: then give the answer for EACH realistic case and list ONLY the missing facts that change the verdict. "
     "Read the facts already given (a circuit supplying socket-outlets IS a final circuit) instead of asking about them.\n"
+    "- INFORMATION QUESTIONS: when the user asks what a rule or requirement is (which standard applies, what the limit "
+    "is, whether a licence, permit or notification is needed, at what height, by when), answer it directly and use "
+    "status INFO - or COMPLIANT / NON_COMPLIANT when they describe specific work that clearly meets or breaks the rule. "
+    "Do NOT use REQUIRES_VERIFICATION just because details vary by site; state the rule, then any exceptions.\n"
     "- NUMBERS: use numeric limits ONLY from VERIFIED CALCULATIONS, VERIFIED LICENSING DATA or the PRACTICE REFERENCE, "
     "exactly as given. If another figure is needed, name the table or clause that holds it and do not state a value. "
     "Never quote a value from a superseded edition. When a measured value is given, compare it with the verified "
@@ -3666,14 +3670,25 @@ async def _ask_claude_raw(system_prompt: str, user_message: str) -> dict:
     is_doc = ("You are a construction RAMS expert" in system_prompt
               or "Generate a numbered safety checklist" in system_prompt
               or "inspection" in system_prompt[:400].lower())
-    attempts = [(MODEL, 0), (MODEL, 4)]
-    if FALLBACK_MODEL and FALLBACK_MODEL != MODEL:
-        attempts.append((FALLBACK_MODEL, 0))
+    # LL-27: keep the whole request well inside the web gateway's time limit. A timeout goes straight to the
+    # faster fallback model (retrying a slow model would only time out again); overload / rate limits retry once.
+    attempts = [(MODEL, 0, 150.0)]
+    retried = False
+    fallback_used = not FALLBACK_MODEL or FALLBACK_MODEL == MODEL
     last = {"status": "ERROR", "result": "The answer service did not respond. Please try again.", "code_reference": ""}
-    for model_name, wait in attempts:
+    while attempts:
+        model_name, wait, tmo = attempts.pop(0)
         if wait:
             await _aio.sleep(wait)
-        result = await _ask_claude_once(system_prompt, user_message, model_name, 8000 if is_doc else 4096)
+        result = await _ask_claude_once(system_prompt, user_message, model_name, 6000 if is_doc else 4096, tmo)
+        if result.get("status") == "ERROR" and not result.get("_final"):
+            timed_out = str(result.get("result", "")).startswith("Request timed out")
+            if not timed_out and not retried and model_name == MODEL:
+                retried = True
+                attempts.insert(0, (MODEL, 4, 120.0))
+            elif not fallback_used:
+                fallback_used = True
+                attempts.append((FALLBACK_MODEL, 0, 90.0))
         if result.get("status") != "ERROR" or result.get("_final"):
             result.pop("_retry", None)
             result.pop("_final", None)
@@ -3685,8 +3700,9 @@ async def _ask_claude_raw(system_prompt: str, user_message: str) -> dict:
     return last
 
 
-async def _ask_claude_once(system_prompt: str, user_message: str, model_name: str, max_tokens: int) -> dict:
-    async with httpx.AsyncClient(timeout=180.0) as client:
+async def _ask_claude_once(system_prompt: str, user_message: str, model_name: str, max_tokens: int,
+                           timeout_s: float = 150.0) -> dict:
+    async with httpx.AsyncClient(timeout=timeout_s) as client:
         try:
             resp = await client.post(
                 ANTHROPIC_URL,
