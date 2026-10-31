@@ -146,10 +146,22 @@ CASES = [
 ]
 
 
-# (region, task, trade, must NOT say) - RAMS must come back as DRAFT, never COMPLIANT
+# (region, task, trade, must NOT say, must contain every one of) - RAMS must come back as DRAFT, never COMPLIANT,
+# complete (no INCOMPLETE / NOT GENERATED part) and with every section present.
+_RAMS_SECTIONS = [r"(?i)risk rating method", r"(?i)2\. risk assessment", r"(?i)3\. method statement",
+                  r"(?i)PPE and equipment", r"(?i)legal and regulatory register", r"(?i)emergency procedures",
+                  r"(?i)pre-start checklist", r"(?i)sign-off"]
 DOC_CASES = [
     ("England", "Electrical installation and inspection of a commercial workshop, 230V single-phase TN-C-S",
-     "Electrical", r"(?i)category\s?0|NFPA\s?70E"),
+     "Electrical", r"(?i)category\s?0|NFPA\s?70E|INCOMPLETE|NOT GENERATED", _RAMS_SECTIONS),
+    ("England", "Install additional socket outlets, lighting circuits and cable containment in an occupied commercial "
+     "office. 230V single-phase and 400V three-phase distribution; the rest of the installation stays live. Drilling, "
+     "ladders or mobile access equipment, cable pulling, testing; some out-of-hours work; two electricians and one "
+     "apprentice; other occupants and contractors present.",
+     "Electrical",
+     r"(?i)above 2\s?m\b|1\.35\s?m|\b30\s?ms\b|Part P (?:applies|notif|requires)|<\s?1\s?%|INCOMPLETE|NOT GENERATED",
+     _RAMS_SECTIONS + [r"(?i)asbestos", r"(?i)Work at Height Regulations 2005", r"(?i)Electricity at Work Regulations 1989",
+                       r"(?i)apprentice"]),
 ]
 
 
@@ -193,7 +205,7 @@ def main():
             passed += 1
             print(f"{i:2d} PASS   {region} {trade}: {q}")
     total = len(CASES)
-    for region, task, trade, must_not in DOC_CASES:
+    for region, task, trade, must_not, must_all in DOC_CASES:
         total += 1
         try:
             r = httpx.post(URL + "/api/query", json={"question": task, "trade": trade, "region": region,
@@ -209,14 +221,18 @@ def main():
         status = str(d.get("status", "")).upper()
         text = str(d.get("result", ""))
         bad = re.search(must_not, text) if must_not else None
-        if r.status_code == 200 and status == "DRAFT" and not bad:
+        missing = [p for p in must_all if not re.search(p, text)]
+        label = task[:60] + ("..." if len(task) > 60 else "")
+        if r.status_code == 200 and status == "DRAFT" and not bad and not missing:
             passed += 1
-            print(f"   PASS   RAMS {region}: labelled DRAFT")
+            print(f"   PASS   RAMS {region}: {label} (DRAFT, all sections, {len(text):,} characters)")
         else:
-            print(f"   FAIL   RAMS {region}: status {status or r.status_code}" + (f"; says {bad.group(0)}" if bad else "")
+            print(f"   FAIL   RAMS {region}: {label}\n    status {status or r.status_code}"
+                  + (f"; says {bad.group(0)!r}" if bad else "")
+                  + (f"; missing {', '.join(missing)}" if missing else "")
                   + (f"; service error: {text[:200]}" if status == "ERROR" else ""))
     print(f"\n{passed}/{total} passed")
-    sys.exit(0 if passed == len(CASES) else 1)
+    sys.exit(0 if passed == total else 1)
 
 
 if __name__ == "__main__":

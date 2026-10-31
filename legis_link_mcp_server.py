@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.25.0"
+VERSION           = "3.26.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -2642,8 +2642,12 @@ _PRACTICE = {
         "with heavy derating), grouping, high ambient temperature, and voltage drop on long runs.\n"
         "- Voltage drop (installations supplied from the public LV network): 3% for lighting and 5% for other uses (BS 7671 Appendix 4).\n"
         "- Lighting circuits: 1.0 or 1.5 mm2 T&E on a 6 A or 10 A device is common practice.\n"
-        "- 30 mA RCD protection is required for socket-outlets rated up to 32 A and for cables concealed in walls at "
-        "less than 50 mm depth that are not otherwise mechanically protected.\n"
+        "- 30 mA RCD additional protection is required for socket-outlets rated up to 32 A (Reg 411.3.3). A cable "
+        "concealed in a wall or partition less than 50 mm deep must be in the permitted zones with 30 mA RCD protection, "
+        "or have an earthed metallic covering, earthed conduit/trunking or mechanical protection (Reg 522.6.202 sets the "
+        "exact conditions; Reg 522.6.204 covers partitions with metal parts).\n"
+        "- Part P of the Building Regulations applies to dwellings only - never to offices, shops or other "
+        "non-domestic premises, where the Electricity at Work Regulations 1989 and BS 7671 apply.\n"
     ),
     ("electrical", "US"): (
         "PRACTICE REFERENCE - United States, electrical (reviewed):\n"
@@ -3725,9 +3729,257 @@ class _LLMaskKeys(logging.Filter):
         return True
 
 
+# LL-33: RAMS are written in four parts at the same time and joined into one document, so a long RAMS is never cut
+# off mid-sentence. If a part is cut short or fails, the document says so - it is never presented as complete.
+# Site-safety notes per country keep the AI from inventing rules (a "2 m" work-at-height threshold in the UK,
+# "30 ms" RCD times, PAT testing as law, Part P for offices).
+_LL_SITE_SAFETY_ALL = (
+    "\n\nSITE SAFETY RULES (reviewed - follow exactly):\n"
+    "- Risk ratings: use a 5x5 matrix with WORD definitions (likelihood 1 Very unlikely, 2 Unlikely, 3 Possible, "
+    "4 Likely, 5 Almost certain; severity 1 Minor (first aid), 2 Minor injury (lost time under 7 days), 3 Serious "
+    "injury, 4 Major injury or long-term ill health, 5 Fatality). Rating = likelihood x severity: 1-4 Low, 5-9 Medium, "
+    "10-16 High, 20-25 Very high. Never give probabilities or percentages.\n"
+    "- Controls follow the hierarchy: eliminate, substitute, engineering controls, administrative controls, PPE last.\n"
+    "- Never state a height threshold, test interval, trip time, approach distance or other number unless it is in "
+    "the PRACTICE REFERENCE or these rules; otherwise name the rule that sets it.\n"
+    "- Existing buildings: before drilling, chasing or cutting, check the building's asbestos register or survey and "
+    "locate hidden services (drawings, cable/pipe detector, client information).\n"
+    "- Do not call routine practices (yearly tool testing, instrument calibration intervals) legal requirements unless "
+    "these rules say so; describe them as company procedure or good practice.\n"
+)
+_LL_SITE_SAFETY = {
+    "UK": (
+        "UNITED KINGDOM (reviewed):\n"
+        "- Work at Height Regulations 2005: apply wherever a person could fall a distance liable to cause personal "
+        "injury. There is NO minimum height - never write 'above 2 m' or any other threshold. Hierarchy: avoid work at "
+        "height where reasonably practicable; otherwise prevent falls with suitable equipment chosen by risk assessment "
+        "(podium steps, mobile access towers, MEWPs); then minimise the distance and consequences of a fall. Ladders and "
+        "stepladders only where the risk assessment shows the risk is low and the use is short, or site features cannot "
+        "be changed (HSE guidance INDG455). To stop a ladder moving: tie it or use an effective stability device; footing "
+        "is the last resort.\n"
+        "- Electricity at Work Regulations 1989 (LAW): reg 4 (systems, work activities, protective equipment; reg 4(2) "
+        "maintenance), reg 12 (means of cutting off supply and isolation), reg 13 (precautions for work on equipment made "
+        "dead), reg 14 (live work only if it is unreasonable for the equipment to be dead, reasonable to work live, and "
+        "suitable precautions are taken), reg 16 (competence). HSE GUIDANCE: HSR25 (memorandum of guidance on the "
+        "regulations), HSG85 (safe working practices), GS38 (test equipment for low-voltage systems).\n"
+        "- Safe isolation: identify the circuit, isolate, lock off with a personal lock and tag, check the voltage "
+        "indicator on a proving unit, test dead, then re-check the indicator on the proving unit.\n"
+        "- Portable tools: there is NO legal requirement for yearly PAT testing. The law (EAWR reg 4(2), PUWER 1998) "
+        "requires equipment to be maintained in a safe condition; the type and frequency of inspection and testing are "
+        "set by risk (HSE guidance INDG236). An RCD does not replace inspection and maintenance.\n"
+        "- Test instruments: suitable for the tests (BS EN 61557 series) and checked/calibrated to the manufacturer's "
+        "recommendation and company procedure - there is no fixed legal interval.\n"
+        "- BS 7671:2018+A4:2026 (STANDARD): RCD testing - one test at the rated residual current; a general (non-delayed) "
+        "RCD must disconnect within 300 ms (Reg 643.7.3). Never write 30 ms or 40 ms. 30 mA additional protection for "
+        "socket-outlets up to 32 A (Reg 411.3.3). Cables concealed in walls less than 50 mm deep: see Reg 522.6.202 "
+        "(permitted zones with 30 mA RCD protection, or earthed metallic covering / mechanical protection).\n"
+        "- Part P of the Building Regulations applies to DWELLINGS only. Never apply Part P to offices, shops, "
+        "workshops or other non-domestic premises.\n"
+        "- CDM 2015 (LAW) applies to all construction work, including electrical installation in an existing building: "
+        "the contractor plans, manages and monitors its work (reg 15); with more than one contractor the client must "
+        "appoint a principal designer and principal contractor (reg 5). A construction phase plan is required (reg 12).\n"
+        "- Control of Asbestos Regulations 2012 (LAW): check the duty holder's asbestos register / management survey "
+        "before drilling or chasing (reg 4); intrusive work may need a refurbishment survey (reg 5).\n"
+        "- Management of Health and Safety at Work Regulations 1999 (LAW): reg 3 risk assessment; reg 19 extra "
+        "assessment for workers under 18 (apprentices).\n"
+        "- Other law often relevant: Health and Safety at Work etc. Act 1974 (ss 2, 3, 7); PUWER 1998; Manual Handling "
+        "Operations Regulations 1992; Control of Noise at Work Regulations 2005; COSHH 2002 (dust, including silica); "
+        "PPE at Work Regulations 1992 (as amended 2022); RIDDOR 2013; Health and Safety (First-Aid) Regulations 1981; "
+        "Regulatory Reform (Fire Safety) Order 2005 (fire safety in the premises; hot work under the building's permit "
+        "system).\n"
+        "- There are no arc-flash PPE categories in UK law; select PPE by risk assessment and avoid live work.\n"
+    ),
+    "AU": (
+        "AUSTRALIA (reviewed):\n"
+        "- A Safe Work Method Statement (SWMS) is legally required for high risk construction work under the WHS "
+        "Regulations, including work where a person could fall more than 2 metres and work on or near energised "
+        "electrical installations or services. Call the document a SWMS.\n"
+        "- Electrical work on energised equipment is generally prohibited under the WHS Regulations except in limited "
+        "circumstances; plan for de-energised work with isolation, lock-out and testing for dead.\n"
+    ),
+    "US": (
+        "UNITED STATES (reviewed):\n"
+        "- Construction fall protection: OSHA 29 CFR 1926 Subpart M (generally 6 feet for construction work); ladders: "
+        "Subpart X; electrical: Subpart K; lockout/tagout practice per OSHA and NFPA 70E. Call the document a Job Hazard "
+        "Analysis (JHA) with a work plan.\n"
+    ),
+}
+
+
+def _ll_site_safety(user_message: str) -> str:
+    try:
+        m = re.match(r"\s*Trade:\s*([^|\n]+?)\s*\|\s*Region:\s*([^|\n]+)", user_message or "")
+        country = _region_country(m.group(2)) if m else ""
+        return _LL_SITE_SAFETY_ALL + _LL_SITE_SAFETY.get(country, "")
+    except Exception:
+        return _LL_SITE_SAFETY_ALL
+
+
+_LL_RAMS_COMMON = (
+    "You are writing ONE PART of a draft RAMS (risk assessment and method statement) for the job described by the "
+    "user. The other parts are written separately at the same time, so write ONLY your part, starting with its "
+    "heading exactly as given. Output plain Markdown (headings, tables, numbered lists) - no JSON, no code fences, no "
+    "preamble, no closing summary. Use the spelling of the user's country (UK English for the UK, Ireland and "
+    "Australia).\n"
+    "This is a DRAFT for review by a competent person: never call it approved, certified, compliant or ready to use.\n"
+    "Do not invent site facts (cable routes, isolation points, access equipment, emergency contacts, building "
+    "systems). Where something is not given, write [TO CONFIRM: what is needed] and carry on.\n"
+    "Every rule or figure you state must be one you are sure applies in this jurisdiction; otherwise name the "
+    "instrument and write 'confirm against the current source'. Label references LAW, GUIDANCE (official guidance, "
+    "codes of practice) or STANDARD. Keep table cells short (one or two sentences) so tables stay complete.\n\n"
+)
+_LL_RAMS_PARTS = [
+    ("1. Project information, scope and risk method",
+     "Write '## 1. Project information, scope and risk method' containing, in order:\n"
+     "- A short document-status block: DRAFT, revision 0, prepared by [TO CONFIRM], not approved for use.\n"
+     "- '### Project information': a table (item | details) from what the user gave; [TO CONFIRM] for the rest.\n"
+     "- '### Scope of work' and '### Not included'.\n"
+     "- '### Responsibilities': a table (role | responsibilities | competence needed), including the client or "
+     "building manager, supervisor, each worker and any apprentice.\n"
+     "- '### Information needed before work starts': a table (information | why it matters | who confirms). Include "
+     "everything that could change the risk assessment or method.\n"
+     "- '### Assumptions': a numbered list, each clearly labelled as an assumption to be confirmed.\n"
+     "- '### Risk rating method': the 5x5 matrix from the SITE SAFETY RULES as a table, with the word definitions "
+     "and the action required for each band.\n"),
+    ("2. Risk assessment",
+     "Write '## 2. Risk assessment': first one line repeating the rating method (likelihood x severity, 1-4 Low, "
+     "5-9 Medium, 10-16 High, 20-25 Very high). Then ONE table with the columns: No | Hazard | Who is at risk | "
+     "Possible harm | L | S | Initial risk | Control measures (label each: Eliminate / Substitute / Engineering / "
+     "Admin / PPE) | Residual L | Residual S | Residual risk | Responsible person. Cover EVERY hazard the user lists, "
+     "plus other hazards relevant to the job; at least 15 rows. Residual ratings must follow from the controls. "
+     "Responsible person = a role, not a name.\n"),
+    ("3. Method statement",
+     "Write '## 3. Method statement': a chronological, numbered method with a '###' sub-heading for each stage: "
+     "pre-start planning and site induction; permits to work (where the site uses them); coordination with the client "
+     "or building manager; identifying existing services and hazardous materials; safe isolation and lock-off; proving "
+     "dead; access equipment and drilling; containment and cable installation; terminations; inspection and testing; "
+     "re-energisation and handover; housekeeping and waste. For each step say who does it and what competence is "
+     "needed, and mark HOLD POINTS where work must stop until a check is signed off. End with '### Competence and "
+     "supervision': a table (activity | who may do it | apprentice supervision level: direct / close / not permitted).\n"),
+    ("4. PPE, equipment, legal register, emergencies and sign-off",
+     "Write these sections in order:\n"
+     "'## 4. PPE and equipment': a table (item | when it is needed | why). PPE chosen by risk assessment; do not "
+     "prescribe arc-rated categories or equipment ratings that have not been established for this task.\n"
+     "'## 5. Legal and regulatory register': a table (reference - exact title | type LAW / GUIDANCE / STANDARD | "
+     "relevant part, only if certain | why it applies to this job).\n"
+     "'## 6. Emergency procedures': electric shock; electrical fire; serious injury; fall from height; evacuation; "
+     "reporting and recording incidents (name the national reporting rules). Use [TO CONFIRM] for site contacts, "
+     "first aiders, assembly point and nearest hospital.\n"
+     "'## 7. Pre-start checklist': a list of '- [ ]' items that must be confirmed before work starts.\n"
+     "'## 8. Review, approval and sign-off': a table (role | name | signature | date) left blank for the "
+     "contractor, the client or building manager and each operative, and the sentence: 'This RAMS is a draft and must "
+     "not be used until the information marked TO CONFIRM has been verified and it has been signed off.'\n"),
+]
+
+
+async def _ll_text_call(system_prompt: str, user_message: str, model_name: str, max_tokens: int,
+                        timeout_s: float):
+    """One plain-text answer: returns (text, stop_reason, error)."""
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as client:
+            resp = await client.post(
+                ANTHROPIC_URL,
+                headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
+                         "content-type": "application/json"},
+                json={"model": model_name, "max_tokens": max_tokens, "system": system_prompt,
+                      "messages": [{"role": "user", "content": user_message}]})
+        if resp.status_code != 200:
+            return "", "", f"API error {resp.status_code}: {resp.text[:160]}"
+        data = resp.json()
+        text = "".join(b.get("text", "") for b in (data.get("content") or [])
+                       if isinstance(b, dict) and b.get("type") == "text").strip()
+        if not text:
+            return "", data.get("stop_reason", ""), "empty answer"
+        return text, data.get("stop_reason", ""), ""
+    except httpx.TimeoutException:
+        return "", "", "timed out"
+    except Exception as e:
+        return "", "", f"error: {e}"
+
+
+async def _ll_rams_part(title: str, instructions: str, system_base: str, user_message: str) -> dict:
+    system_prompt = system_base + "\n\nYOUR PART: " + title + "\n" + instructions
+    text, stop, err = await _ll_text_call(system_prompt, user_message, MODEL, 9000, 170.0)
+    if err and FALLBACK_MODEL and FALLBACK_MODEL != MODEL:
+        logging.warning(f"RAMS part '{title}' failed on {MODEL}: {err}")
+        text, stop, err = await _ll_text_call(system_prompt, user_message, FALLBACK_MODEL, 8000, 110.0)
+    if err:
+        logging.warning(f"RAMS part '{title}' failed: {err}")
+    text = re.sub(r"^```(?:markdown|md)?\s*|\s*```$", "", text or "").strip()
+    return {"title": title, "text": text, "cut": stop == "max_tokens", "error": err}
+
+
+async def _ll_rams_sectioned(user_message: str) -> dict:
+    import asyncio as _aio
+    base = _ll_focus_country(SAFETY_CORE + _LL_RAMS_COMMON + _practice_for(user_message), user_message)
+    base += _ll_site_safety(user_message)
+    parts = await _aio.gather(*[_ll_rams_part(t, i, base, user_message) for t, i in _LL_RAMS_PARTS])
+    if all(p["error"] for p in parts):
+        return {"status": "ERROR", "result": "The RAMS could not be generated. Please try again.", "code_reference": ""}
+    out = ["**RISK ASSESSMENT AND METHOD STATEMENT - DRAFT**",
+           "**Status: DRAFT - not approved for use.** Prepared with Legis-Link for review by a competent person. "
+           "Items marked TO CONFIRM must be verified on site before work starts."]
+    missing = []
+    for p in parts:
+        if p["error"]:
+            missing.append(p["title"])
+            out.append(f"## {p['title']}\n\n**NOT GENERATED** - this section could not be produced. Generate the "
+                       f"RAMS again before using it.")
+            continue
+        out.append(p["text"])
+        if p["cut"]:
+            missing.append(p["title"])
+            out.append(f"> **INCOMPLETE:** the section '{p['title']}' was cut short by the length limit. Do not use "
+                       f"it until it has been regenerated or completed by hand.")
+    if missing:
+        out.insert(2, "> **This draft is incomplete.** Missing or cut short: " + "; ".join(missing) + ".")
+    return {"status": "DRAFT", "result": "\n\n".join(out),
+            "code_reference": "See section 5 (legal and regulatory register)"}
+
+
+def _ll_md_tables_to_html(text: str) -> str:
+    """Markdown pipe tables -> one-line HTML tables for the web app (other text is left as it is)."""
+    import html as _h
+    lines = text.split("\n")
+    out, i = [], 0
+    sep = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
+    while i < len(lines):
+        if ("|" in lines[i] and i + 1 < len(lines) and sep.match(lines[i + 1])):
+            def cells(row):
+                row = row.strip()
+                if row.startswith("|"):
+                    row = row[1:]
+                if row.endswith("|"):
+                    row = row[:-1]
+                return [_h.escape(c.strip(), quote=False) for c in row.split("|")]
+            head = cells(lines[i])
+            rows = []
+            i += 2
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                rows.append(cells(lines[i]))
+                i += 1
+            td = "border:1px solid #ccc;padding:4px 6px;vertical-align:top;text-align:left"
+            h = "".join(f'<th style="{td}">{c}</th>' for c in head)
+            b = "".join("<tr>" + "".join(f'<td style="{td}">{c}</td>' for c in r) + "</tr>" for r in rows)
+            out.append('<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:0.85em">'
+                       f"<thead><tr>{h}</tr></thead><tbody>{b}</tbody></table></div>")
+            continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out)
+
+
 async def ask_claude(system_prompt: str, user_message: str) -> dict:
     """LL-24: one place to finalise every AI answer (documents are drafts, never 'compliant')."""
+    if "You are a construction RAMS expert" in system_prompt:
+        return await _ll_rams_sectioned(user_message)          # LL-33
+    if "Generate a numbered safety checklist" in system_prompt:
+        system_prompt = system_prompt + _ll_site_safety(user_message)   # LL-33
     result = await _ask_claude_raw(system_prompt, user_message)
+    # LL-32: one spelling for every status ("requires verification" / "Requires-Verification" -> REQUIRES_VERIFICATION),
+    # so the rules below always see it.
+    if isinstance(result, dict) and isinstance(result.get("status"), str):
+        result["status"] = re.sub(r"[\s\-]+", "_", result["status"].strip()).upper()
     if isinstance(result, dict) and ("You are a construction RAMS expert" in system_prompt
                                      or "Generate a numbered safety checklist" in system_prompt):
         if result.get("status") not in ("ERROR",):
@@ -4087,7 +4339,7 @@ TOOLBOX_TOPICS = {
         {"title":"Working safely on live electrical panels","objective":"Ensure all crew understand isolation and LOTO procedures before any panel work.","hazards":[{"risk":"CRITICAL","text":"Electric shock from live conductors","ctrl":"Isolate, test with voltage detector, apply LOTO before touching"},{"risk":"CRITICAL","text":"Arc flash from short circuit","ctrl":"Arc-rated PPE minimum Category 1, maintain safe approach distances"},{"risk":"HIGH","text":"Wrong glove rating","ctrl":"Class 00 insulated gloves rated to 500V AC, inspect before use"}],"checklist":["Isolation point identified and accessible?","LOTO devices available for all workers?","Voltage detector tested and within calibration?","Arc-rated PPE available?","Emergency procedure and first aider location known?"],"discussion":"A colleague says the panel is already isolated. What do you do before touching any conductors?","ref":"AS/NZS 3000:2018 Cl.2.6; WHS Act 2011 s.36; AS/NZS 4836:2011"},
         {"title":"Cable sizing — verify before you pull","objective":"Crew understands voltage drop limits and how to verify correct cable sizing on site.","hazards":[{"risk":"HIGH","text":"Cable overheating from undersized conductor","ctrl":"Verify cable size against AS/NZS 3008 tables — never guess"},{"risk":"HIGH","text":"Voltage drop exceeding 5% limit","ctrl":"Calculate VD before pulling cable"},{"risk":"MED","text":"Rework cost and programme delay","ctrl":"Check once before ordering, not after installation"}],"checklist":["Circuit design load confirmed?","Cable size calculated — not assumed?","Voltage drop verified within limits?","Derating factors applied for conduit/bundling?","Cable matches drawing specification?"],"discussion":"What is the maximum voltage drop for a final sub-circuit in NSW?","ref":"AS/NZS 3008.1.1:2017; AS/NZS 3000:2018 Cl.3.6.2"},
         {"title":"RCD testing and requirements","objective":"All crew know which circuits require RCD protection and how to test correctly.","hazards":[{"risk":"HIGH","text":"Unprotected socket outlets","ctrl":"All socket outlets in residential must have 30mA RCD protection"},{"risk":"MED","text":"RCD not tested — false sense of security","ctrl":"Test RCD with test button monthly, trip current annually by licensed tester"},{"risk":"MED","text":"Wrong RCD type selected","ctrl":"Type A for circuits with electronic equipment, Type AC for general use"}],"checklist":["RCD protection confirmed on all socket outlet circuits?","RCD test button functional?","Last test date within 12 months?","RCD rated correctly for circuit load?","Test results documented?"],"discussion":"Which circuits in a residential installation always require RCD protection?","ref":"AS/NZS 3000:2018 Cl.2.6.3; AS/NZS 61008"},
-        {"title":"Working at height — electrical installation","objective":"Every crew member knows fall protection requirements for electrical work above 2m.","hazards":[{"risk":"HIGH","text":"Fall from ladder or elevated platform","ctrl":"3-point contact on ladder, edge protection or harness above 2m"},{"risk":"HIGH","text":"Live conductors near work platform","ctrl":"Maintain minimum approach distance, consider de-energising adjacent circuits"},{"risk":"MED","text":"Tools and materials falling to ground","ctrl":"Exclusion zone below, tool lanyards, secured materials"}],"checklist":["Fall protection in place before ascending?","Adjacent live conductors identified?","Exclusion zone barricaded at ground level?","Harness and anchor point inspected?","Rescue plan established?"],"discussion":"What is the minimum height at which fall protection is mandatory in NSW?","ref":"WHS Act 2011 s.36; AS/NZS 1891.1:2020; Safe Work Australia Working at Height COP"},
+        {"title":"Working at height — electrical installation","objective":"Every crew member knows how to avoid, prevent and limit falls during electrical work at height.","hazards":[{"risk":"HIGH","text":"Fall from ladder or elevated platform","ctrl":"Choose access by risk assessment (podium, tower or MEWP before a ladder); ladders only for short, low-risk tasks, with 3 points of contact"},{"risk":"HIGH","text":"Live conductors near work platform","ctrl":"Maintain minimum approach distance, consider de-energising adjacent circuits"},{"risk":"MED","text":"Tools and materials falling to ground","ctrl":"Exclusion zone below, tool lanyards, secured materials"}],"checklist":["Fall protection in place before ascending?","Adjacent live conductors identified?","Exclusion zone barricaded at ground level?","Harness and anchor point inspected?","Rescue plan established?"],"discussion":"What is the minimum height at which fall protection is mandatory in NSW?","ref":"WHS Act 2011 s.36; AS/NZS 1891.1:2020; Safe Work Australia Working at Height COP"},
         {"title":"Switchboard labelling requirements","objective":"Crew understands mandatory labelling requirements before energising any switchboard.","hazards":[{"risk":"HIGH","text":"Incorrect circuit identification — wrong circuit isolated","ctrl":"Label every circuit clearly before energising — never leave blanks"},{"risk":"MED","text":"Missing danger/warning labels","ctrl":"AS/NZS 3000 labels mandatory on all switchboards"},{"risk":"MED","text":"Unlabelled circuits create ongoing safety risk","ctrl":"Document circuit schedule and store in switchboard door pocket"}],"checklist":["All circuits labelled clearly?","Danger/warning labels fitted?","Circuit schedule completed and inserted?","Arc flash label fitted if required?","Switchboard door latch functional?"],"discussion":"What information must appear on a circuit breaker label under AS/NZS 3000?","ref":"AS/NZS 3000:2018 Cl.5.3; AS/NZS 1319:1994"},
         {"title":"Testing and inspection before energising","objective":"All crew understand mandatory tests required before a new installation is energised.","hazards":[{"risk":"CRITICAL","text":"Energising a faulty installation","ctrl":"Complete all required tests before energising — no shortcuts"},{"risk":"HIGH","text":"Missing earth continuity","ctrl":"Earth continuity test required on all circuits before energising"},{"risk":"HIGH","text":"Insulation breakdown","ctrl":"Insulation resistance test at 500V DC — minimum 1 MOhm"}],"checklist":["Continuity of protective conductors tested?","Insulation resistance tested and results recorded?","Polarity verified correct?","Earth fault loop impedance tested?","RCD operation tested?"],"discussion":"What is the minimum acceptable insulation resistance for a 240V circuit?","ref":"AS/NZS 3000:2018 Section 8; AS/NZS 3017:2022"},
         {"title":"Confined space electrical work","objective":"Crew understands additional requirements when performing electrical work in confined spaces.","hazards":[{"risk":"CRITICAL","text":"Electrocution risk increased in confined space","ctrl":"Reduced voltage tools (25V) or RCD protection mandatory in confined spaces"},{"risk":"CRITICAL","text":"Oxygen deficiency or toxic atmosphere","ctrl":"Atmospheric testing before entry, continuous monitoring during work"},{"risk":"HIGH","text":"No rescue access","ctrl":"Standby person mandatory, rescue plan established before entry"}],"checklist":["Confined space entry permit obtained?","Atmospheric test completed and documented?","Standby person nominated and briefed?","Rescue equipment available?","Reduced voltage or RCD protection in place?"],"discussion":"What voltage is considered safe for portable tools used in a confined space?","ref":"AS 2865:2009; WHS Regulation 2017 Ch.4; AS/NZS 3000:2018"},
@@ -4109,7 +4361,7 @@ TOOLBOX_TOPICS = {
         {"title":"Fire prevention — hot work controls","objective":"All crew understand fire risks from welding and required controls.","hazards":[{"risk":"HIGH","text":"Ignition of nearby combustibles","ctrl":"Remove combustibles 10m radius or use fire blankets to shield"},{"risk":"HIGH","text":"Sparks igniting concealed materials","ctrl":"30-minute fire watch after welding — check voids and ceiling spaces"},{"risk":"MED","text":"No fire extinguisher available","ctrl":"Type C extinguisher within 3m of hot work at all times"}],"checklist":["Hot work permit obtained?","Combustibles removed or shielded?","Fire extinguisher within 3m?","Fire watch person nominated?","30-minute post-work watch confirmed?"],"discussion":"Welding finishes at 3pm. Until what time must the fire watch continue?","ref":"AS 1940:2017; WHS Act 2011; Safe Work Australia Hot Work COP"},
     ],
     "Solar / Battery": [
-        {"title":"DC arc flash — rooftop solar safety","objective":"All crew understand why DC arcs are more dangerous and required controls.","hazards":[{"risk":"HIGH","text":"DC arc flash — cannot self-extinguish","ctrl":"DC-rated isolators mandatory. AC isolators on DC = fire risk."},{"risk":"HIGH","text":"Live DC voltage even when inverter off","ctrl":"Array generates voltage in any light. Shade or cover panels before string work."},{"risk":"HIGH","text":"Falls from roof","ctrl":"Edge protection or harness required above 2m. Anchor points 15kN min."}],"checklist":["DC-rated isolators confirmed?","Panel shading available?","Fall protection in place before roof access?","Arc-rated PPE for string work?","String voltage calculated within inverter limits?"],"discussion":"Why can you not use a standard AC isolator on a DC solar circuit?","ref":"AS/NZS 5033:2021 Cl.4.3; AS/NZS 3000:2018; CEC Installer Guidelines"},
+        {"title":"DC arc flash — rooftop solar safety","objective":"All crew understand why DC arcs are more dangerous and required controls.","hazards":[{"risk":"HIGH","text":"DC arc flash — cannot self-extinguish","ctrl":"DC-rated isolators mandatory. AC isolators on DC = fire risk."},{"risk":"HIGH","text":"Live DC voltage even when inverter off","ctrl":"Array generates voltage in any light. Shade or cover panels before string work."},{"risk":"HIGH","text":"Falls from roof","ctrl":"Edge protection first; harness and rated anchor points where edge protection is not practicable. Follow the local height rules."}],"checklist":["DC-rated isolators confirmed?","Panel shading available?","Fall protection in place before roof access?","Arc-rated PPE for string work?","String voltage calculated within inverter limits?"],"discussion":"Why can you not use a standard AC isolator on a DC solar circuit?","ref":"AS/NZS 5033:2021 Cl.4.3; AS/NZS 3000:2018; CEC Installer Guidelines"},
         {"title":"Battery storage installation safety","objective":"Crew knows mandatory clearance and location requirements for battery systems.","hazards":[{"risk":"HIGH","text":"Thermal runaway — fire and toxic gas","ctrl":"600mm clearance all sides. No sleeping areas. Ventilation for thermal event."},{"risk":"HIGH","text":"Short circuit during installation","ctrl":"Use insulated tools. Cover adjacent terminals. One connection at a time."},{"risk":"MED","text":"Battery installed in wrong location","ctrl":"Cannot install in living areas, sleeping areas, or blocking egress"}],"checklist":["Location approved — not sleeping area or egress path?","600mm clearance all sides?","Ventilation provided?","Insulated tools in use?","Thermal management system connected?"],"discussion":"What is the minimum clearance required around a lithium battery system?","ref":"AS/NZS 5139:2019 Cl.5.3; CEC Battery Installation Guidelines"},
     ],
     "Fire protection": [
@@ -4125,7 +4377,7 @@ TOOLBOX_TOPICS = {
         {"title":"Concrete placement — safety requirements","objective":"Crew knows hazards of concrete placement and required controls.","hazards":[{"risk":"HIGH","text":"Concrete burns from skin contact","ctrl":"Waterproof gloves and rubber boots mandatory. Wash contact immediately with water."},{"risk":"HIGH","text":"Pump line failure — concrete blowout","ctrl":"Never stand in front of pump outlet. Check all clamps before pumping."},{"risk":"MED","text":"Noise from concrete pump","ctrl":"Hearing protection when within 3m of pump motor during operation"}],"checklist":["Waterproof gloves and boots available for all crew?","Pump lines and clamps inspected?","Washout area designated?","First aid kit with eye wash available?","Exclusion zone around pump outlet?"],"discussion":"Concrete gets on your forearm and starts to feel warm. What do you do?","ref":"Safe Work Australia Cement Products COP; AS 3610:2018"},
     ],
     "Roofing": [
-        {"title":"Falls from roof — control hierarchy","objective":"Every crew member knows today's fall protection plan and individual obligations.","hazards":[{"risk":"HIGH","text":"Fall from roof edge — leading cause of fatality","ctrl":"Edge protection (preferred) or harness + anchor above 2m. Mandatory."},{"risk":"HIGH","text":"Fragile roof surfaces — skylights, old metal","ctrl":"Roof boards over fragile surfaces. Never step directly on polycarbonate."},{"risk":"MED","text":"Materials falling to ground","ctrl":"Exclusion zone below. Toe boards on platforms. Secure loose materials."}],"checklist":["Edge protection installed before first person on roof?","Harness and anchor points inspected?","Exclusion zone barricaded at ground level?","Fragile surfaces identified and marked?","Rescue plan established?"],"discussion":"What is the minimum anchor point rating for a single person working at height?","ref":"Safe Work Australia Working at Height COP; AS/NZS 1891.1:2020; WHS Reg 2017 s.78"},
+        {"title":"Falls from roof — control hierarchy","objective":"Every crew member knows today's fall protection plan and individual obligations.","hazards":[{"risk":"HIGH","text":"Fall from roof edge — leading cause of fatality","ctrl":"Edge protection (preferred), or harness and rated anchor where it is not practicable. Follow the local height rules."},{"risk":"HIGH","text":"Fragile roof surfaces — skylights, old metal","ctrl":"Roof boards over fragile surfaces. Never step directly on polycarbonate."},{"risk":"MED","text":"Materials falling to ground","ctrl":"Exclusion zone below. Toe boards on platforms. Secure loose materials."}],"checklist":["Edge protection installed before first person on roof?","Harness and anchor points inspected?","Exclusion zone barricaded at ground level?","Fragile surfaces identified and marked?","Rescue plan established?"],"discussion":"What is the minimum anchor point rating for a single person working at height?","ref":"Safe Work Australia Working at Height COP; AS/NZS 1891.1:2020; WHS Reg 2017 s.78"},
         {"title":"Wind uplift — correct fixing schedule","objective":"Crew understands the importance of correct fixing schedule for wind region.","hazards":[{"risk":"HIGH","text":"Roof failure in wind event — under-fixed sheets","ctrl":"Use manufacturer fixing guide for your wind category. Do not estimate."},{"risk":"HIGH","text":"Wrong screw class — corrosion failure","ctrl":"Class 4 minimum for coastal. Class 3 for inland. Check local corrosion zone."},{"risk":"MED","text":"Tools dropped from roof","ctrl":"Tool lanyards mandatory. No unsecured tools on roof surface."}],"checklist":["Wind category confirmed for this site?","Fixing schedule from manufacturer available?","Correct screw class for corrosion zone?","Edge and perimeter bays fixed to increased schedule?","Tool lanyards fitted to all hand tools?"],"discussion":"What wind category applies to this site and how does it affect your fixing schedule?","ref":"AS 1170.2:2021; NASH Standard; manufacturer fixing guide"},
     ],
 }
@@ -4275,7 +4527,8 @@ async def ask_claude_vision(system_prompt: str, user_message: str,
                       ]}]}
             )
             if resp.status_code == 200:
-                return _parse_llm_text(resp.json()["content"][0]["text"])
+                return _parse_llm_text("".join(b.get("text", "") for b in (resp.json().get("content") or [])
+                                               if isinstance(b, dict) and b.get("type") == "text"))  # LL-33
             return {"status": "ERROR", "result": f"API error {resp.status_code}", "code_reference": ""}
         except Exception as e:
             return {"status": "ERROR", "result": str(e), "code_reference": ""}
@@ -4843,6 +5096,7 @@ def run_http():
                 result_text = result_text.get("result", str(result_text))
 
             # Convert newlines to HTML breaks
+            result_text = _ll_md_tables_to_html(str(result_text))  # LL-33
             result_text = str(result_text).replace("\\n", "<br>").replace("\n", "<br>")
             # Convert markdown bold **text** to HTML <strong>
             import re as _re
@@ -4876,7 +5130,11 @@ def run_http():
                                     lines.append("")
                             result_text = "<br>".join(lines)
                         if not result.get("status") or result.get("status") == "INFO":
-                            result["status"] = parsed.get("status", "COMPLIANT")
+                            # LL-32: the status found inside a nested answer gets the same rules as any other
+                            _ns = re.sub(r"[\s\-]+", "_", str(parsed.get("status", "COMPLIANT")).strip()).upper()
+                            if _ns == "REQUIRES_VERIFICATION" and _ll_is_info_question(SYSTEM_PROMPTS[prompt_key], user_msg):
+                                _ns = "INFO"
+                            result["status"] = _ns
                         if not result.get("code_reference"):
                             refs = parsed.get("key_standards_and_regulations", [])
                             if refs and isinstance(refs, list):
