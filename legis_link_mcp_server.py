@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.26.0"
+VERSION           = "3.26.1"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -3846,7 +3846,8 @@ _LL_RAMS_PARTS = [
      "5-9 Medium, 10-16 High, 20-25 Very high). Then ONE table with the columns: No | Hazard | Who is at risk | "
      "Possible harm | L | S | Initial risk | Control measures (label each: Eliminate / Substitute / Engineering / "
      "Admin / PPE) | Residual L | Residual S | Residual risk | Responsible person. Cover EVERY hazard the user lists, "
-     "plus other hazards relevant to the job; at least 15 rows. Residual ratings must follow from the controls. "
+     "plus other hazards relevant to the job; at least 15 rows and no more than 22. Keep every cell under 20 words so "
+     "the table is always finished. Residual ratings must follow from the controls. "
      "Responsible person = a role, not a name.\n"),
     ("3. Method statement",
      "Write '## 3. Method statement': a chronological, numbered method with a '###' sub-heading for each stage: "
@@ -3899,12 +3900,20 @@ async def _ll_text_call(system_prompt: str, user_message: str, model_name: str, 
 
 async def _ll_rams_part(title: str, instructions: str, system_base: str, user_message: str) -> dict:
     system_prompt = system_base + "\n\nYOUR PART: " + title + "\n" + instructions
-    text, stop, err = await _ll_text_call(system_prompt, user_message, MODEL, 9000, 170.0)
+    # LL-34: the risk-assessment table is the longest part, so it gets the biggest budget; every part's outcome is
+    # logged (length, stop reason, model) so a cut-short section can be traced in the Railway logs.
+    big = title.startswith("2.")
+    model_used = MODEL
+    text, stop, err = await _ll_text_call(system_prompt, user_message, MODEL, 14000 if big else 9000,
+                                          200.0 if big else 170.0)
     if err and FALLBACK_MODEL and FALLBACK_MODEL != MODEL:
         logging.warning(f"RAMS part '{title}' failed on {MODEL}: {err}")
-        text, stop, err = await _ll_text_call(system_prompt, user_message, FALLBACK_MODEL, 8000, 110.0)
+        model_used = FALLBACK_MODEL
+        text, stop, err = await _ll_text_call(system_prompt, user_message, FALLBACK_MODEL, 8000, 95.0)
     if err:
         logging.warning(f"RAMS part '{title}' failed: {err}")
+    else:
+        logging.warning(f"RAMS part '{title}': {len(text or '')} chars, stop={stop}, model={model_used}")
     text = re.sub(r"^```(?:markdown|md)?\s*|\s*```$", "", text or "").strip()
     return {"title": title, "text": text, "cut": stop == "max_tokens", "error": err}
 

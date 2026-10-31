@@ -153,13 +153,13 @@ _RAMS_SECTIONS = [r"(?i)risk rating method", r"(?i)2\. risk assessment", r"(?i)3
                   r"(?i)pre-start checklist", r"(?i)sign-off"]
 DOC_CASES = [
     ("England", "Electrical installation and inspection of a commercial workshop, 230V single-phase TN-C-S",
-     "Electrical", r"(?i)category\s?0|NFPA\s?70E|INCOMPLETE|NOT GENERATED", _RAMS_SECTIONS),
+     "Electrical", r"(?i)category\s?0|NFPA\s?70E", _RAMS_SECTIONS),
     ("England", "Install additional socket outlets, lighting circuits and cable containment in an occupied commercial "
      "office. 230V single-phase and 400V three-phase distribution; the rest of the installation stays live. Drilling, "
      "ladders or mobile access equipment, cable pulling, testing; some out-of-hours work; two electricians and one "
      "apprentice; other occupants and contractors present.",
      "Electrical",
-     r"(?i)above 2\s?m\b|1\.35\s?m|\b30\s?ms\b|Part P (?:applies|notif|requires)|<\s?1\s?%|INCOMPLETE|NOT GENERATED",
+     r"(?i)above 2\s?m\b|1\.35\s?m|\b30\s?ms\b|Part P (?:applies|notif|requires)|<\s?1\s?%",
      _RAMS_SECTIONS + [r"(?i)asbestos", r"(?i)Work at Height Regulations 2005", r"(?i)Electricity at Work Regulations 1989",
                        r"(?i)apprentice"]),
 ]
@@ -222,6 +222,10 @@ def main():
         text = str(d.get("result", ""))
         bad = re.search(must_not, text) if must_not else None
         missing = [p for p in must_all if not re.search(p, text)]
+        # the server's own markers for a part that was cut short or not generated (exact, case-sensitive)
+        cut = re.search(r"Missing or cut short: ([^<.]*)", text)
+        if cut or "NOT GENERATED" in text or "INCOMPLETE:" in text:
+            missing.append("complete document (server marked incomplete: " + (cut.group(1) if cut else "see text") + ")")
         label = task[:60] + ("..." if len(task) > 60 else "")
         if r.status_code == 200 and status == "DRAFT" and not bad and not missing:
             passed += 1
