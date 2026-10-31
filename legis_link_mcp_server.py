@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.24.4"
+VERSION           = "3.25.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -3685,6 +3685,46 @@ def _practice_for(user_message: str) -> str:
     return _ANSWER_RULES + extra + _ll_verified_calcs(user_message)
 
 
+# LL-30: the status label of an information question is decided in code, not by the AI.
+# "What is the limit / Which standard / Do I need to notify ..." asks for a rule, so the answer is INFO. The AI
+# sometimes labelled these "Needs checking" even when the answer itself was clear, which told users the rule was
+# uncertain when it was not. Judgement questions ("Is this OK?", "Can I ...?", a described installation) are never
+# touched, and a COMPLIANT / NON_COMPLIANT label from the AI is never changed.
+_LL_INFO_Q = re.compile(
+    r"^\s*(?:what|which|who|whom|whose|when|where|how|at what|under what"
+    r"|do (?:i|we|you) have to|(?:do|does)\b[^?]*?\bneed\b|is (?:a|an|any)\b.*?\b(?:licen[cs]e|permit|certificat\w*|"
+    r"notification|registration|approval)\b.*?\b(?:needed|required)\b|must (?:i|we)\b|am i (?:allowed|required))",
+    re.I | re.S)
+_LL_NOT_INFO_PROMPTS = ("You are a construction RAMS expert", "Generate a numbered safety checklist",
+                        "analysing a site photo", "Check if the material meets local code")
+
+
+def _ll_is_info_question(system_prompt: str, user_message: str) -> bool:
+    try:
+        if any(p in system_prompt for p in _LL_NOT_INFO_PROMPTS):
+            return False
+        m = re.search(r"Question:\s*(.+)", user_message or "", re.S)
+        q = (m.group(1) if m else (user_message or "")).strip()
+        return bool(_LL_INFO_Q.match(q))
+    except Exception:
+        return False
+
+
+# LL-31: API keys sent as ?key=... are masked in the access log, so Pro keys are never written to logs.
+class _LLMaskKeys(logging.Filter):
+    _rx = re.compile(r"((?:^|[?&])(?:key|api_key|token)=)[^&\s]+", re.I)
+
+    def filter(self, record):
+        try:
+            if isinstance(record.args, tuple) and len(record.args) >= 3 and isinstance(record.args[2], str):
+                a = list(record.args)
+                a[2] = self._rx.sub(r"\1***", a[2])
+                record.args = tuple(a)
+        except Exception:
+            pass
+        return True
+
+
 async def ask_claude(system_prompt: str, user_message: str) -> dict:
     """LL-24: one place to finalise every AI answer (documents are drafts, never 'compliant')."""
     result = await _ask_claude_raw(system_prompt, user_message)
@@ -3692,6 +3732,9 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
                                      or "Generate a numbered safety checklist" in system_prompt):
         if result.get("status") not in ("ERROR",):
             result["status"] = "DRAFT"
+    elif (isinstance(result, dict) and result.get("status") == "REQUIRES_VERIFICATION"
+          and _ll_is_info_question(system_prompt, user_message)):
+        result["status"] = "INFO"
     return result
 
 
@@ -3810,7 +3853,17 @@ async def _ask_claude_once(system_prompt: str, user_message: str, model_name: st
                 }
             )
             if resp.status_code == 200:
-                raw_text = resp.json()["content"][0]["text"]
+                # LL-31: newer models can return other blocks (e.g. thinking) before the answer, so content[0] is not
+                # always text. Join every text block instead of reading content[0]["text"].
+                data = resp.json()
+                blocks = data.get("content") or []
+                raw_text = "".join(b.get("text", "") for b in blocks
+                                   if isinstance(b, dict) and b.get("type") == "text").strip()
+                if not raw_text:
+                    kinds = ",".join(str(b.get("type")) for b in blocks if isinstance(b, dict))
+                    return {"status": "ERROR",
+                            "result": f"Empty answer (stop_reason={data.get('stop_reason')}, blocks={kinds or 'none'})",
+                            "code_reference": ""}
                 return _parse_llm_text(raw_text)
 
             error_body = resp.text
@@ -4898,6 +4951,7 @@ def run_http():
 
         print(f"[Legis-Link MCP v{VERSION}] HTTP port {PORT} — auth+ratelimit+audit",
               file=sys.stderr)
+        logging.getLogger("uvicorn.access").addFilter(_LLMaskKeys())
         uvicorn.run(_ll_canonical(starlette_app), host="0.0.0.0", port=PORT)
 
     except ImportError as e:
