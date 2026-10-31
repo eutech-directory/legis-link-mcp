@@ -25,7 +25,7 @@ and the conditions that would change the answer.
 - **Cites the edition in force:** AS/NZS 3000:2018, BS 7671:2018+A4:2026, AS/NZS 3500:2025, AS/NZS 5601.1:2022.
   For the NEC and US plumbing codes it names the edition each state has adopted instead of guessing.
 - **Checked licensing data:** who may legally do the work, the licence class, the apprentice route and the
-  contractor licence, for **155+ trade-and-region combinations** across 22 jurisdictions.
+  contractor licence, for **215 trade-and-region combinations** across 31 regions (all 10 trades in the UK and Australia).
 - **Tested:** 59 known-answer checks (57 questions across 10 trades and 5 regions, plus 2 full RAMS documents) run
   against the live server after every change. Current score: **59 / 59** (31 October 2026).
 
@@ -50,11 +50,11 @@ The [web app](https://legis-link.com/app) also has a daily toolbox talk per trad
 
 | Area | Regions | Checked licensing data |
 |------|---------|------------------------|
-| Australia | all 8 states and territories | all 8 |
-| United Kingdom | England, Scotland, Wales, Northern Ireland | all 4 |
-| United States | all 50 states + DC | California, Texas, Florida, New York |
-| Canada | 10 provinces | Ontario, British Columbia, Alberta |
-| European Union | 14 countries | Ireland, Germany, France |
+| Australia | all 8 states and territories | all 8, all 10 trades |
+| United Kingdom | England, Scotland, Wales, Northern Ireland | all 4, all 10 trades |
+| United States | all 50 states + DC | CA, TX, FL, NY, IL, PA, OH, GA, NC, WA (5 trades) |
+| Canada | 10 provinces | Ontario, British Columbia, Alberta (5 trades) |
+| European Union | 14 countries | Ireland, Germany, France, Spain, Italy, Netherlands (5 trades) |
 
 **Trades:** Electrical, Plumbing, Gas fitting, HVAC/refrigeration, Carpentry, plus Welding, Solar/Battery,
 Fire protection, Concrete and Roofing.

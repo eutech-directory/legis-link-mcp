@@ -143,6 +143,23 @@ CASES = [
      {"COMPLIANT", "INFO"}, r"0\.1\s?mg", r"(?i)OSHA", "Concrete"),
     ("VIC", "Can I install an engineered stone kitchen benchtop in a new house?",
      {"NON_COMPLIANT"}, r"(?i)ban|prohibit", None, "Concrete"),
+    # LL-37: licensing data for solar, roofing, fire protection, welding and concrete (UK and Australia)
+    ("QLD", "Do I need a licence to do roof tiling in Queensland?",
+     {"COMPLIANT", "INFO"}, r"QBCC|Queensland Building and Construction Commission", None, "Roofing"),
+    ("NSW", "Do I need a licence to lay a $12,000 concrete driveway for a homeowner?",
+     {"COMPLIANT", "INFO"}, r"(?i)contractor licence|Building Commission NSW", None, "Concrete"),
+    ("VIC", "Who is allowed to install fire sprinklers in Victoria?",
+     {"COMPLIANT", "INFO"}, r"(?i)fire protection", None, "Fire protection"),
+    ("ACT", "Do I need a licence to do concreting work in the ACT?",
+     {"COMPLIANT", "INFO"}, r"(?i)not (?:currently )?(?:a )?licen|isn.t (?:currently )?(?:a )?licen|no (?:specific |separate )?licen", None, "Concrete"),
+    ("England", "Does my solar installer need MCS certification for me to get Smart Export Guarantee payments?",
+     {"COMPLIANT", "INFO"}, r"MCS", None, "Solar / Battery"),
+    ("Northern Ireland", "Which scheme pays for solar electricity exported to the grid in Northern Ireland?",
+     {"COMPLIANT", "INFO"}, r"(?i)supplier|(?:does not|doesn.t|not) apply|not available|isn.t available",
+     None, "Solar / Battery"),
+    ("England", "Do welders need a licence in England?",
+     {"COMPLIANT", "INFO"}, r"(?i)no licen|not (?:require|need)[^.]{0,20}licen|don.t need[^.]{0,20}licen|isn.t[^.]{0,20}licen|not licen",
+     None, "Welding"),
 ]
 
 
