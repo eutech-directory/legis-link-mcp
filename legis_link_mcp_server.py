@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.24.2"
+VERSION           = "3.24.3"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -2454,6 +2454,40 @@ async def _ll_robots(request):
 
 
 # LL-15: proof for the official MCP Registry that we own legis-link.com (public key only, set in Railway)
+# LL-28: long answers (e.g. a RAMS on a stronger model) can take over 100 s, and Cloudflare in front of legis-link.com
+# drops any request that sends nothing for 100 s (HTTP 524). If the answer is not ready within 15 s we start a 200
+# response straight away and send a space every 10 s (spaces before JSON are valid JSON), then the JSON itself.
+def _ll_keepalive(handler, first_wait: float = 15.0, every: float = 10.0):
+    import asyncio as _aio
+    from starlette.responses import StreamingResponse
+
+    async def wrapped(request):
+        task = _aio.ensure_future(handler(request))
+        try:
+            return await _aio.wait_for(_aio.shield(task), first_wait)
+        except _aio.TimeoutError:
+            pass
+
+        async def body():
+            while not task.done():
+                yield b" "
+                try:
+                    await _aio.wait_for(_aio.shield(task), every)
+                except _aio.TimeoutError:
+                    continue
+                except Exception:
+                    break
+            try:
+                yield task.result().body
+            except Exception as e:
+                yield json.dumps({"status": "ERROR", "result": "Server error: " + str(e)[:120],
+                                  "code_reference": ""}).encode()
+
+        return StreamingResponse(body(), media_type="application/json",
+                                 headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no"})
+    return wrapped
+
+
 async def _ll_registry_auth(request):
     from starlette.responses import PlainTextResponse as _P
     line = os.environ.get("MCP_REGISTRY_AUTH", "").strip()
@@ -4797,7 +4831,7 @@ def run_http():
             Route("/wordmark-light.svg", _ll_icon), Route("/wordmark-dark.svg", _ll_icon),
             Route("/sw.js",         handle_sw),
             Route("/api/fingerprint", handle_fingerprint, methods=["POST"]),
-            Route("/api/query",     handle_api_query, methods=["POST"]),
+            Route("/api/query",     _ll_keepalive(handle_api_query), methods=["POST"]),
             Route("/.well-known/mcp/server-card.json", handle_server_card),
             Route("/.well-known/mcp-registry-auth", _ll_registry_auth),
             Mount("/messages/", app=sse.handle_post_message),
