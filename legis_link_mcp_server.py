@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.28.0"
+VERSION           = "3.28.1"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -319,8 +319,12 @@ try:
     LL_TEST_DAILY = int(os.environ.get("LEGIS_TEST_DAILY", "") or "1000")
 except ValueError:
     LL_TEST_DAILY = 1000
-# Shown on the landing page: update with each full eval run.
-_LL_EVAL = {"n": "59", "score": "59/59", "date": "31 Oct 2026"}
+# Shown on the landing page. LL-38: set from Railway variables after each FULL eval run - LEGIS_EVAL_SCORE (e.g.
+# "66/66") and LEGIS_EVAL_DATE (e.g. "1 Nov 2026"); the number of checks is the figure after the slash.
+import html as _ll_html
+_ll_score = (os.environ.get("LEGIS_EVAL_SCORE", "") or "59/59").strip()
+_LL_EVAL = {"n": _ll_html.escape(_ll_score.split("/")[-1].strip()), "score": _ll_html.escape(_ll_score),
+            "date": _ll_html.escape((os.environ.get("LEGIS_EVAL_DATE", "") or "31 Oct 2026").strip())}
 
 
 def _ll_is_test_key(key) -> bool:
