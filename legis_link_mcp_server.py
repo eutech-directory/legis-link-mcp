@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.29.0"
+VERSION           = "3.30.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -410,7 +410,7 @@ def check_rate_limit(api_key: str, tier: str, who: str = "") -> dict:
     """Check and count one request. Each key, or each anonymous visitor (by IP), has its own daily count."""
     _is_admin = bool(api_key and ADMIN_KEY and _hmac_mod.compare_digest(api_key.strip(), ADMIN_KEY))
     try:   # LL-40: the tier decides the daily ceiling; test/admin keys always get fresh answers
-        _LL_TIER.set("pro" if (_is_admin or tier == "pro") else "free")
+        _LL_TIER.set("pro" if (_is_admin or (tier == "pro" and not _ll_is_test_key(api_key))) else "free")   # LL-41
         _LL_NOCACHE.set(_is_admin or _ll_is_test_key(api_key))
     except Exception:
         pass
@@ -3709,6 +3709,40 @@ def _ll_calc_us(q):
     return out
 
 
+# LL-41: Australian earth fault-loop impedance computed in code: Zs max = Uo / Ia with Uo = 230 V and Ia the typical
+# mean tripping current of the circuit-breaker (Type B 4 x In, Type C 7.5 x In, Type D 12.5 x In) - the method behind the
+# AS/NZS 3000:2018 verification table (e.g. C20 -> 1.53 ohm). Cable ratings and voltage-drop figures (AS/NZS 3008 tables)
+# are NOT computed here.
+_AU_CURVE_K = {"B": 4.0, "C": 7.5, "D": 12.5}
+
+
+def _ll_calc_au(q):
+    out = []
+    br = _ll_find_breaker(q)
+    zs_m = re.search(r"(?:zs|loop impedance|fault[- ]loop)[^0-9]{0,40}?(\d+(?:\.\d+)?)\s*(?:ohm|Ω)", q, re.I)
+    zs = _ll_num(zs_m.group(1)) if zs_m else None
+    if br:
+        curve, In = br
+        k = _AU_CURVE_K[curve]
+        ia = k * In
+        zmax = 230.0 / ia
+        zs_txt = "%.2f" % zmax
+        out.append(f"- Device: Type {curve} {In} A circuit-breaker.")
+        out.append(f"- Maximum earth fault-loop impedance (AS/NZS 3000:2018 automatic disconnection, verified at "
+                   f"Section 8): Zs max = Uo / Ia = 230 V / ({k:g} x {In} A = {ia:g} A) = {zs_txt} ohm. Confirm against "
+                   "the published table for the exact device.")
+        if zs is not None:
+            if zs <= zmax:
+                v = f"PASS - {zs} ohm is within the maximum of {zs_txt} ohm."
+                if zs > 0.9 * zmax:
+                    v += (" It is close to the limit, so check the reading allows for conductor temperature under "
+                          "fault conditions before accepting it.")
+            else:
+                v = f"FAIL - {zs} ohm exceeds the maximum of {zs_txt} ohm for the circuit-breaker."
+            out.append("- Measured Zs check against the circuit-breaker: " + v)
+    return out
+
+
 def _ll_verified_calcs(user_message: str) -> str:
     """Numbers computed by code from published tables, injected as authoritative data for the AI to use exactly."""
     try:
@@ -3722,6 +3756,9 @@ def _ll_verified_calcs(user_message: str) -> str:
         elif country == "US":
             lines = _ll_calc_us(user_message)
             src = "the NEC (NFPA 70)"
+        elif country == "AU":   # LL-41
+            lines = _ll_calc_au(user_message)
+            src = "AS/NZS 3000:2018"
         else:
             return ""
         if not lines:
