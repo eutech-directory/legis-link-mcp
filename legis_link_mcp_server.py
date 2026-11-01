@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.30.0"
+VERSION           = "3.31.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -346,7 +346,149 @@ def _ll_fix_pages(html: str) -> str:
     html = html.replace("<li>50 queries/day</li>", f"<li>{free} questions/day</li>")
     html = html.replace("1,000 queries/day", f"{pro} questions/day")
     html = html.replace('textContent = "1000/day"', f'textContent = "{PRO_DAILY_LIMIT}/day"')
+    html = html.replace('<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a></p>',   # LL-42
+                        '<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a> &bull; '
+                        '<a href="/privacy">Privacy</a> &bull; <a href="/terms">Terms</a></p>')
     return html
+
+
+# LL-42: privacy notice and terms of use pages (/privacy, /terms). Every statement matches what the code does.
+_LL_OPERATOR = os.environ.get("LEGIS_OPERATOR", "") or "NANO AI Agency (Kenya)"
+_LL_LEGAL_UPDATED = "1 November 2026"
+_LL_LEGAL_CSS = """
+:root{--bg:#0F1B2D;--card:#16253B;--ink:#F6F3EC;--muted:#A9B4C4;--accent:#FFC72C;--line:rgba(246,243,236,.14)}
+@media (prefers-color-scheme: light){:root{--bg:#F6F3EC;--card:#FFFFFF;--ink:#0F1B2D;--muted:#4A5568;--accent:#B7791F;--line:rgba(15,27,45,.14)}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:32px 16px 64px}a{color:var(--accent)}h1{font-size:28px;margin:0 0 4px}
+h2{font-size:19px;margin:32px 0 8px}p,li{color:var(--ink)}.muted{color:var(--muted);font-size:14px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600}nav{margin-bottom:24px;font-size:14px}
+"""
+
+
+def _ll_legal_page(title: str, body: str) -> str:
+    return ("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"/>"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>"
+            f"<title>{title} - Legis-Link</title><link rel=\"icon\" href=\"/favicon.svg\" type=\"image/svg+xml\"/>"
+            f"<style>{_LL_LEGAL_CSS}</style></head><body><main>"
+            "<nav><a href=\"/\">Legis-Link</a> &middot; <a href=\"/app\">App</a> &middot; <a href=\"/privacy\">Privacy</a>"
+            " &middot; <a href=\"/terms\">Terms</a></nav>"
+            f"<h1>{title}</h1><p class=\"muted\">Last updated {_LL_LEGAL_UPDATED}</p>{body}</main></body></html>")
+
+
+def _ll_privacy_html() -> str:
+    free, pro = f"{FREE_DAILY_LIMIT:,}", f"{PRO_DAILY_LIMIT:,}"
+    body = f"""
+<div class="box">Short version: we don't store the questions you ask. We keep a small amount of data to run daily limits,
+deliver Pro keys and keep the service reliable. Questions are sent to our AI provider to produce the answer.</div>
+<p>Legis-Link is operated by {_LL_OPERATOR}. Contact: <a href="mailto:info@legis-link.com">info@legis-link.com</a>.</p>
+
+<h2>What we store</h2>
+<table><tr><th>Data</th><th>Why</th><th>How long</th></tr>
+<tr><td>A daily question count for each free visitor, keyed by a random token your browser creates (or, when there is
+no token, a one-way hash of your IP address - never the IP itself)</td><td>The free limit of {free} questions a day</td>
+<td>30 days</td></tr>
+<tr><td>Daily request counts per key or visitor, stored as one-way hashes</td><td>Daily limits for free and Pro ({pro} a day)</td><td>Kept as anonymous totals</td></tr>
+<tr><td>A service record for each request: time, version, the first 8 characters of the key (if any), tier, tool, trade,
+region and result status - <b>not</b> the question or the answer</td><td>Reliability, abuse prevention and usage figures</td><td>While needed for those purposes</td></tr>
+<tr><td>For Pro customers: email address, Pro key, Gumroad sale ID and product, received from Gumroad when you buy</td>
+<td>Issuing and checking your Pro key; refunds</td><td>While you are a customer, then as needed for records</td></tr>
+</table>
+
+<h2>Your questions and answers</h2>
+<p>To answer a question, its text (with the trade and region you chose) is sent to our AI provider, Anthropic, which
+processes it under its commercial API terms. If Anthropic is unavailable for billing reasons and a backup provider is
+configured, OpenAI may be used instead. We do not save the question text. A copy of an answer may be kept in the
+server's memory for up to 7 days so the same question is not paid for twice; it is not linked to you and is cleared
+whenever the server restarts.</p>
+
+<h2>In your browser</h2>
+<p>The web app keeps a few things on your own device (browser local storage): the random free-tier token, your Pro key
+if you enter it, a daily question counter, and your recent answers. You can clear them by clearing this site's data in
+your browser.</p>
+
+<h2>Payments</h2>
+<p>Pro is sold through Gumroad. Card details go to Gumroad and its payment processors; we never receive them. Gumroad
+sends us your email and licence key so we can activate Pro, and the owner gets a sale notification.</p>
+
+<h2>Services we use</h2>
+<ul><li>Railway - hosting the server (United States)</li><li>Neon - database</li><li>Cloudflare - DNS and network
+protection</li><li>Anthropic (and OpenAI if configured as a backup) - generating answers</li><li>Gumroad - payments and
+licence keys</li><li>Telegram - sale and service alerts sent to the owner</li></ul>
+<p>We don't sell personal data and don't use it for advertising.</p>
+
+<h2>Your rights</h2>
+<p>Depending on where you live (for example the UK GDPR, EU GDPR, Australian Privacy Act or Kenya's Data Protection Act),
+you may have the right to access, correct or delete your personal data, or to object to its use. Email
+<a href="mailto:info@legis-link.com">info@legis-link.com</a> and we will respond within 30 days.</p>
+
+<h2>Changes</h2><p>We will update this page when what we collect changes, and show the date at the top.</p>
+"""
+    return _ll_legal_page("Privacy notice", body)
+
+
+def _ll_terms_html() -> str:
+    free, pro = f"{FREE_DAILY_LIMIT:,}", f"{PRO_DAILY_LIMIT:,}"
+    body = f"""
+<div class="box"><b>Legis-Link gives guidance, not certification.</b> Answers are preliminary compliance references to
+help qualified people work faster. They are not legal, engineering or professional advice, and they do not certify or
+approve any work. Always check against the current published standard and the local authority, and use a licensed or
+registered person wherever the law requires one.</div>
+<p>These terms apply to legis-link.com, the web app, the API and the MCP server ("the service"), operated by
+{_LL_OPERATOR}. By using the service you agree to them.</p>
+
+<h2>1. What the service does</h2>
+<p>Legis-Link answers construction compliance questions and drafts documents such as RAMS and safety checklists using
+AI, grounded in reviewed reference notes and checked licensing data. Laws, standards and their editions change; local
+rules, the specific site and the equipment used can change the answer.</p>
+
+<h2>2. Your responsibilities</h2>
+<ul><li>Check every answer that a decision depends on against the current official source before relying on it.</li>
+<li>Documents (RAMS, checklists, method statements) are <b>drafts</b>. A competent person must review, complete and
+approve them for the specific site before use.</li>
+<li>Do not use the service as the only basis for safety-critical work, certification, or sign-off.</li></ul>
+
+<h2>3. Free and Pro plans</h2>
+<ul><li>Free: {free} questions a day, no account needed.</li><li>Pro: all tools and {pro} questions a day, as described
+on the Gumroad product page. Your Pro key is personal to you or your organisation - don't share or publish it.</li>
+<li>Daily limits are fair-use limits and may change; free answers may be paused at times of very high demand.</li>
+<li>Payments and refunds are handled through Gumroad. For help, email
+<a href="mailto:info@legis-link.com">info@legis-link.com</a>.</li></ul>
+
+<h2>4. Acceptable use</h2>
+<p>Don't try to get around limits, scrape or bulk-download the service, resell access or answers, or use it to build a
+competing dataset without written agreement. We may suspend keys or access that break these terms.</p>
+
+<h2>5. Standards and copyright</h2>
+<p>Legis-Link names standards and clauses but does not reproduce copyrighted standards (for example AS/NZS, BS, NFPA
+and EN documents). Buy or access the published standard for the full text.</p>
+
+<h2>6. No warranty</h2>
+<p>The service is provided "as is". We work to keep it accurate - it is tested against a set of known answers after
+every update - but we do not guarantee that any answer is complete, current or correct for your situation.</p>
+
+<h2>7. Limitation of liability</h2>
+<p>To the extent the law allows, we are not liable for any loss arising from reliance on the service, including failed
+inspections, rework, delays, fines or injury, and our total liability is limited to the amount you paid for the service
+in the 12 months before the claim. Nothing in these terms limits liability that cannot be limited by law.</p>
+
+<h2>8. Changes</h2>
+<p>We may update the service and these terms. The date at the top shows the latest version; continuing to use the
+service means you accept the update.</p>
+<p class="muted">Privacy: see the <a href="/privacy">privacy notice</a>.</p>
+"""
+    return _ll_legal_page("Terms of use", body)
+
+
+async def _ll_privacy_route(request):
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(_ll_privacy_html())
+
+
+async def _ll_terms_route(request):
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(_ll_terms_html())
 
 
 def validate_api_key(key: str | None) -> dict:
@@ -4803,7 +4945,7 @@ async def ask_claude_vision(system_prompt: str, user_message: str,
 
 def check_free_tier_server(fingerprint, ip):
     FREE_DAILY = FREE_DAILY_LIMIT   # LL-35: one setting (LEGIS_FREE_DAILY) for the web app and MCP
-    fp = (fingerprint or ("ip_" + (ip or "unknown")))[:200]
+    fp = (fingerprint or ("ip_" + hashlib.sha256((ip or "unknown").encode()).hexdigest()[:32]))[:200]   # LL-42: never store the raw IP
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -4817,13 +4959,17 @@ def check_free_tier_server(fingerprint, ip):
                     "RETURNING query_count",
                     (fp,)
                 )
-                # Best-effort retention: drop counters older than 30 days.
-                try:
-                    cur.execute("DELETE FROM legis_link_free_usage WHERE date_utc < CURRENT_DATE - INTERVAL '30 days'")
-                except Exception:
-                    pass
+                # LL-42: read the count BEFORE any other query (fetching after the DELETE always failed, so the
+                # counter never worked and the clean-up never ran)
                 row = cur.fetchone()
                 used = row[0] if row else 0
+                # Best-effort retention: drop counters older than 30 days, and any counter keyed by a raw IP address
+                try:
+                    cur.execute("DELETE FROM legis_link_free_usage WHERE date_utc < CURRENT_DATE - INTERVAL '30 days'")
+                    cur.execute("DELETE FROM legis_link_free_usage WHERE fingerprint LIKE 'ip\\_%%' "
+                                "AND fingerprint !~ '^ip_[0-9a-f]{32}$'")
+                except Exception:
+                    pass
             conn.commit()
         return {"allowed": used < FREE_DAILY, "remaining": max(0, FREE_DAILY - used), "used": used}
     except Exception as e:
@@ -4832,7 +4978,7 @@ def check_free_tier_server(fingerprint, ip):
 
 
 def increment_free_tier(fingerprint, ip):
-    fp = (fingerprint or ("ip_" + (ip or "unknown")))[:200]
+    fp = (fingerprint or ("ip_" + hashlib.sha256((ip or "unknown").encode()).hexdigest()[:32]))[:200]   # LL-42: never store the raw IP
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -5460,6 +5606,8 @@ def run_http():
             Route("/roadmap",       handle_roadmap),
             Route("/app",           handle_app),
             Route("/connect",       handle_connect_page),
+            Route("/privacy",       _ll_privacy_route),   # LL-42
+            Route("/terms",         _ll_terms_route),     # LL-42
             Route("/manifest.json", _ll_manifest),
             Route("/favicon.ico", _ll_icon), Route("/favicon.svg", _ll_icon), Route("/icon.svg", _ll_icon),
             Route("/icon-192.png", _ll_icon), Route("/icon-512.png", _ll_icon), Route("/apple-touch-icon.png", _ll_icon),
