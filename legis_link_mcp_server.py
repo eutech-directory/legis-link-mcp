@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.28.2"
+VERSION           = "3.29.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -408,7 +408,13 @@ def _usage_hit(bucket: str, limit: int):
 
 def check_rate_limit(api_key: str, tier: str, who: str = "") -> dict:
     """Check and count one request. Each key, or each anonymous visitor (by IP), has its own daily count."""
-    if api_key and ADMIN_KEY and _hmac_mod.compare_digest(api_key.strip(), ADMIN_KEY):
+    _is_admin = bool(api_key and ADMIN_KEY and _hmac_mod.compare_digest(api_key.strip(), ADMIN_KEY))
+    try:   # LL-40: the tier decides the daily ceiling; test/admin keys always get fresh answers
+        _LL_TIER.set("pro" if (_is_admin or tier == "pro") else "free")
+        _LL_NOCACHE.set(_is_admin or _ll_is_test_key(api_key))
+    except Exception:
+        pass
+    if _is_admin:
         return {"allowed": True, "remaining": 999999, "limit": 999999}
     limit = PRO_DAILY_LIMIT if tier == "pro" else FREE_DAILY_LIMIT
     if _ll_is_test_key(api_key):   # LL-36: the eval key has its own allowance
@@ -4146,7 +4152,52 @@ def _ll_md_tables_to_html(text: str) -> str:
     return "\n".join(out)
 
 
+# LL-40: spending guard.
+#  - The same question (same version, tool, trade, region and wording) is answered from memory for 7 days instead of
+#    paying for it again. The eval test key and the admin key always get a fresh answer.
+#  - Daily ceiling: when the day's estimated AI spend reaches LEGIS_DAILY_CAP_USD (default 10), free-tier questions
+#    get a "paused for today" message instead of an AI call; Pro keys keep working. A Telegram alert goes out.
+_LL_TIER = _cv.ContextVar("ll_tier", default="")
+_LL_NOCACHE = _cv.ContextVar("ll_nocache", default=False)
+try:
+    LL_DAILY_CAP_USD = float(os.environ.get("LEGIS_DAILY_CAP_USD", "") or "10")
+except ValueError:
+    LL_DAILY_CAP_USD = 10.0
+_LL_ANS_CACHE = {}
+_LL_ANS_TTL = 7 * 86400
+_LL_ANS_MAX = 3000
+_LL_FREE_PAUSED = ("Free answers are paused for the rest of today because of high demand. Please try again "
+                   "tomorrow, or use a Pro key.")
+
+
+def _ll_spend_today() -> float:
+    import datetime as _d
+    return _LL_SPEND["usd"] if _LL_SPEND.get("day") == _d.date.today().isoformat() else 0.0
+
+
 async def ask_claude(system_prompt: str, user_message: str) -> dict:
+    """LL-40: answer cache and daily ceiling around every AI answer."""
+    import copy as _copy
+    key = None
+    if not _LL_NOCACHE.get():
+        key = hashlib.sha256((VERSION + "\x00" + system_prompt + "\x00" + (user_message or "")).encode()).hexdigest()
+        hit = _LL_ANS_CACHE.get(key)
+        if hit and _time_mod.time() - hit[0] < _LL_ANS_TTL:
+            logging.warning("Answer served from cache (no AI cost)")
+            return _copy.deepcopy(hit[1])
+    if _LL_TIER.get() != "pro" and _ll_spend_today() >= LL_DAILY_CAP_USD:
+        _ll_alert("cap", f"daily AI ceiling of ${LL_DAILY_CAP_USD:.0f} reached - free-tier answers are paused until "
+                         "tomorrow (Pro keys still work). Raise LEGIS_DAILY_CAP_USD in Railway to change it.")
+        return {"status": "ERROR", "result": _LL_FREE_PAUSED, "code_reference": ""}
+    result = await _ll_ask_inner(system_prompt, user_message)
+    if key and isinstance(result, dict) and result.get("status") not in ("ERROR", None):
+        _LL_ANS_CACHE[key] = (_time_mod.time(), _copy.deepcopy(result))
+        while len(_LL_ANS_CACHE) > _LL_ANS_MAX:
+            _LL_ANS_CACHE.pop(next(iter(_LL_ANS_CACHE)))
+    return result
+
+
+async def _ll_ask_inner(system_prompt: str, user_message: str) -> dict:
     """LL-24: one place to finalise every AI answer (documents are drafts, never 'compliant')."""
     if "You are a construction RAMS expert" in system_prompt:
         return await _ll_rams_sectioned(user_message)          # LL-33
@@ -4599,13 +4650,24 @@ def _ll_not_english(d) -> bool:
     return len(words) > 30 and hits / len(words) > 0.04
 
 
+# LL-40: the regions offered in the app (the only ones the toolbox talk is localized for)
+_LL_APP_REGIONS = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'ACT', 'TAS', 'NT', 'England', 'Scotland', 'Wales', 'Northern Ireland', 'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'Washington DC', 'Ontario', 'British Columbia', 'Alberta', 'Quebec', 'Manitoba', 'Saskatchewan', 'Nova Scotia', 'New Brunswick', 'Newfoundland', 'Prince Edward Island', 'Germany', 'France', 'Netherlands', 'Ireland', 'Spain', 'Italy', 'Belgium', 'Austria', 'Denmark', 'Sweden', 'Finland', 'Portugal', 'Poland', 'Czech Republic']
+
+
 async def _localize_topic(topic: dict, trade: str, region: str) -> dict:
     """Rewrite a topic's region-specific references for the given jurisdiction.
     Subject stays the same; standards/citations/control wording localized.
     Cached per trade+region+day. AU topics for an AU region pass through."""
     if not region or _region_in_country(region, "Australia") or region == "Australia":
         return topic  # source content is already AU-native
-    key = (trade, region, _dt.date.today().isoformat(), topic.get("title",""), "en")
+    # LL-40: only the app's own regions are localized (each one costs an AI call), and US states / Canadian provinces
+    # share one localized talk per country per day.
+    _canon = {r.upper(): r for r in _LL_APP_REGIONS}.get(" ".join(region.split()).upper())
+    if not _canon:
+        return topic
+    region = _canon
+    _cc = _region_country(_canon)
+    key = (trade, _cc if _cc in ("US", "CA") else _canon, _dt.date.today().isoformat(), topic.get("title",""), "en")
     if key in _TOOLBOX_CACHE:
         return _TOOLBOX_CACHE[key]
     framework = _region_framework(region)
