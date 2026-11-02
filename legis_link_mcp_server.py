@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.34.0"
+VERSION           = "3.35.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -348,6 +348,11 @@ def _ll_fix_pages(html: str) -> str:
     html = html.replace("<li>50 queries/day</li>", f"<li>{free} questions/day</li>")
     html = html.replace("1,000 queries/day", f"{pro} questions/day")
     html = html.replace('textContent = "1000/day"', f'textContent = "{PRO_DAILY_LIMIT}/day"')
+    html = html.replace("const FREE_LIMIT = 50;", f"const FREE_LIMIT = {FREE_DAILY_LIMIT};")   # LL-46
+    html = html.replace('id="rate">50 left<', f'id="rate">{FREE_DAILY_LIMIT} left<')
+    html = html.replace("(free tier, 50 questions a day)", f"(free tier, {free} questions a day)")
+    html = html.replace("Leave the API key empty (50 requests/day)", f"Leave the API key empty ({free} questions a day)")
+    html = html.replace("1,000 requests/day", f"{pro} questions a day")
     html = html.replace('<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a></p>',   # LL-42
                         '<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a> &bull; '
                         '<a href="/tools">Free calculators</a> &bull; '   # LL-43
@@ -1609,6 +1614,159 @@ async def _ll_admin_api(request):
     except Exception as e:
         logging.warning(f"Admin API {name}: {e}")
         return _J({"error": "Something went wrong - see the server log."}, status_code=500)
+
+
+# LL-46: printable toolbox talk built for the site - big writing spaces for the crew register and sign-off,
+# Yes / No / N/A tick boxes, room for the crew's answers, US Letter paper for US and Canadian regions, page numbers.
+def _ll_toolbox_pdf(topic: dict, trade: str, region: str, crew_rows: int = 16) -> bytes:
+    import io as _io
+    import html as _h
+    from reportlab.lib.pagesizes import A4, letter
+    from reportlab.lib import colors as C
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, CondPageBreak
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+
+    cc = _region_country(region) if region else ""
+    size = letter if cc in ("US", "CA") else A4
+    W, H = size
+    PW = W - 30 * mm
+    NAVY, BLUE, LBLUE = C.HexColor("#0a2540"), C.HexColor("#1a6fd4"), C.HexColor("#e8f0fb")
+    GREEN, AMBER, LAMB, RED, LRED = (C.HexColor("#0d7a55"), C.HexColor("#b45309"), C.HexColor("#fef3c7"),
+                                      C.HexColor("#b91c1c"), C.HexColor("#fee2e2"))
+    LGRAY, GRAY, DGRAY, BOR, LINE = (C.HexColor("#f8f9fa"), C.HexColor("#6b7280"), C.HexColor("#374151"),
+                                     C.HexColor("#d1d5db"), C.HexColor("#9ca3af"))
+    e = lambda s: _h.escape(str(s or ""))
+
+    def S(name, **kw):
+        base = dict(fontName="Helvetica", fontSize=10, textColor=DGRAY, leading=13)
+        base.update(kw)
+        return ParagraphStyle(name, **base)
+    SR, SS = S("r"), S("s", fontSize=9, leading=12)
+    SH = S("h", fontName="Helvetica-Bold", fontSize=10, textColor=BLUE, spaceBefore=8, spaceAfter=4)
+    TH = S("th", fontName="Helvetica-Bold", fontSize=9, textColor=C.white)            # table header (white on navy)
+    THC = S("thc", fontName="Helvetica-Bold", fontSize=9, textColor=C.white, alignment=TA_CENTER)
+    LAB = S("lab", fontName="Helvetica-Bold", fontSize=8, textColor=GRAY, leading=10)  # label inside a write-in box
+    SF = S("f", fontSize=8, textColor=GRAY, leading=10, alignment=TA_CENTER)
+
+    def head_table(rows, widths, extra=()):
+        t = Table(rows, colWidths=widths, repeatRows=1)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), NAVY), ("GRID", (0, 0), (-1, -1), 0.6, BOR),
+                               ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("TOPPADDING", (0, 0), (-1, -1), 5),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                               ("RIGHTPADDING", (0, 0), (-1, -1), 6)] + list(extra)))
+        return t
+
+    def write_boxes(cells, cols, height):
+        """Labelled boxes with real writing space: the label sits small at the top-left, the rest is blank."""
+        rows = [cells[i:i + cols] for i in range(0, len(cells), cols)]
+        rows = [r + [""] * (cols - len(r)) for r in rows]
+        t = Table([[Paragraph(e(c), LAB) for c in r] for r in rows], colWidths=[PW / cols] * cols,
+                  rowHeights=[height] * len(rows))
+        t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.8, LINE), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("TOPPADDING", (0, 0), (-1, -1), 3), ("LEFTPADDING", (0, 0), (-1, -1), 5)]))
+        return t
+
+    def tick():
+        t = Table([[""]], colWidths=[5 * mm], rowHeights=[5 * mm])
+        t.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, DGRAY), ("BACKGROUND", (0, 0), (-1, -1), C.white)]))
+        return t
+
+    story = []
+    hdr = Table([[Paragraph("<b>LEGIS-LINK</b> &mdash; Toolbox Talk", S("hh", fontName="Helvetica-Bold", fontSize=14,
+                                                                          textColor=C.white, leading=18)),
+                  Paragraph(f"{e(trade)} &middot; {e(region) or 'All regions'}", S("hr", fontSize=11, textColor=C.white,
+                                                                                   leading=14, alignment=TA_RIGHT))]],
+                colWidths=[PW * 0.6, PW * 0.4])
+    hdr.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), NAVY), ("PADDING", (0, 0), (-1, -1), 10),
+                             ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story += [hdr, Spacer(1, 3 * mm)]
+    tt = Table([[Paragraph(e(topic.get("title")), S("tt", fontName="Helvetica-Bold", fontSize=16, textColor=NAVY, leading=20))]],
+               colWidths=[PW])
+    tt.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), LBLUE), ("PADDING", (0, 0), (-1, -1), 10),
+                            ("LINEBELOW", (0, 0), (-1, -1), 2, BLUE)]))
+    story += [tt, Spacer(1, 2 * mm)]
+    story.append(write_boxes(["Site / location", "Date", "Start time", "Duration (min)"], 4, 11 * mm))
+
+    if topic.get("_not_local"):
+        warn = Table([[Paragraph(f"<b>Not yet adapted to {e(region)}.</b> This talk could not be matched to {e(region)}'s "
+                                 "rules just now, so the controls and references below follow Australian guidance (for "
+                                 "example respirator classes). Download it again in a few minutes, or check every control "
+                                 "against your local regulator before use.", S("w", fontSize=9, textColor=RED, leading=12))]],
+                     colWidths=[PW])
+        warn.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), LRED), ("PADDING", (0, 0), (-1, -1), 8),
+                                  ("LINEBEFORE", (0, 0), (0, -1), 3, RED)]))
+        story += [Spacer(1, 2 * mm), warn]
+
+    story.append(Paragraph("OBJECTIVE", SH))
+    story.append(Paragraph(e(topic.get("objective")), SR))
+
+    story.append(Paragraph("HAZARDS AND CONTROLS", SH))
+    rows = [[Paragraph("Hazard", TH), Paragraph("Risk", THC), Paragraph("Controls", TH)]]
+    for hz in topic.get("hazards") or []:
+        risk = str(hz.get("risk", "")).upper()
+        rc = RED if risk == "CRITICAL" else (AMBER if risk == "HIGH" else GREEN)
+        rows.append([Paragraph(e(hz.get("text")), SR),
+                     Paragraph(f"<b>{e(risk)}</b>", S("rk" + risk, fontName="Helvetica-Bold", fontSize=9, textColor=rc,
+                                                      alignment=TA_CENTER)),
+                     Paragraph(e(hz.get("ctrl")), SS)])
+    story.append(head_table(rows, [PW * 0.32, PW * 0.12, PW * 0.56],
+                            [("ROWBACKGROUNDS", (0, 1), (-1, -1), [C.white, LGRAY]), ("VALIGN", (0, 1), (-1, -1), "TOP")]))
+
+    story.append(Paragraph("PRE-START CHECKLIST", SH))
+    rows = [[Paragraph("Check", TH), Paragraph("Yes", THC), Paragraph("No", THC), Paragraph("N/A", THC)]]
+    for c in topic.get("checklist") or []:
+        rows.append([Paragraph(e(c), SR), tick(), tick(), tick()])
+    story.append(head_table(rows, [PW * 0.73, PW * 0.09, PW * 0.09, PW * 0.09],
+                            [("ROWBACKGROUNDS", (0, 1), (-1, -1), [C.white, LGRAY]), ("ALIGN", (1, 1), (-1, -1), "CENTER")]))
+    story.append(Paragraph("Any <b>No</b> answer: stop and fix it before work starts.", S("nb", fontSize=8, textColor=GRAY)))
+
+    dq = Table([[Paragraph(e(topic.get("discussion")), S("dq", fontName="Helvetica-BoldOblique", fontSize=10,
+                                                         textColor=AMBER, leading=14))]], colWidths=[PW])
+    dq.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), LAMB), ("PADDING", (0, 0), (-1, -1), 8),
+                            ("LINEBEFORE", (0, 0), (0, -1), 3, AMBER)]))
+    notes = Table([[""]] * 3, colWidths=[PW], rowHeights=[9 * mm] * 3)
+    notes.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.6, LINE)]))
+    story.append(KeepTogether([Paragraph("DISCUSSION QUESTION", SH), dq,
+                               Paragraph("Crew answers / points raised:", S("cn", fontSize=8, textColor=GRAY, spaceBefore=4)),
+                               notes]))
+
+    story.append(Paragraph("REFERENCES", SH))
+    story.append(Paragraph(e(topic.get("ref")), S("ref", fontSize=9, textColor=BLUE, leading=12)))
+
+    story.append(CondPageBreak(60 * mm))
+    story.append(KeepTogether([Paragraph("SUPERVISOR SIGN-OFF", SH),
+                               write_boxes(["Name (print)", "Licence / ID", "Signature", "Date and time"], 2, 13 * mm)]))
+
+    story.append(CondPageBreak(70 * mm))
+    story.append(Paragraph("CREW ATTENDANCE", SH))
+    story.append(Paragraph("By signing I confirm I attended this talk, understood it, and will follow the controls above.",
+                           S("dec", fontSize=9, textColor=DGRAY, spaceAfter=4)))
+    rows = [[Paragraph(x, TH) for x in ("#", "Name (print)", "Company / role", "Licence / ID", "Signature", "Time")]]
+    rows += [[Paragraph(str(i + 1), S("n%d" % i, fontSize=9, textColor=GRAY, alignment=TA_CENTER)), "", "", "", "", ""]
+             for i in range(crew_rows)]
+    at = Table(rows, colWidths=[PW * 0.05, PW * 0.27, PW * 0.18, PW * 0.17, PW * 0.23, PW * 0.10],
+               rowHeights=[8 * mm] + [11 * mm] * crew_rows, repeatRows=1)
+    at.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), NAVY), ("GRID", (0, 0), (-1, -1), 0.8, LINE),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [C.white, LGRAY])]))
+    story.append(at)
+
+    def page(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(GRAY)
+        canvas.drawString(15 * mm, 8 * mm, "Legis-Link (legis-link.com) - preliminary safety briefing. Check controls against current "
+                                           "standards and your site risk assessment.")
+        canvas.drawRightString(W - 15 * mm, 8 * mm, f"Page {doc.page}")
+        canvas.restoreState()
+
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=size, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=12 * mm,
+                            bottomMargin=16 * mm, title=f"Toolbox talk - {topic.get('title', '')}", author="Legis-Link")
+    doc.build(story, onFirstPage=page, onLaterPages=page)
+    return buf.getvalue()
 
 
 def validate_api_key(key: str | None) -> dict:
@@ -3520,7 +3678,7 @@ SERVER_CARD = {
                 "role":     {"type": "string", "enum": VALID_ROLES, "default": "Qualified Tradesperson",
                              "description": "The role of the person asking. Affects the depth and terminology of the answer."},
                 "api_key":  {"type": "string",
-                             "description": "Legis-Link API key. Optional: leave empty for the free tier (50 requests/day); Pro users paste their ll_p_ key. Get a free key at https://legis-link.com"}
+                             "description": "Legis-Link API key. Optional: leave empty for the free tier (a daily question limit applies); Pro users paste their ll_p_ key. Get a free key at https://legis-link.com"}
             }, "required": ["trade", "region", "question"]}
         },
         {
@@ -3540,7 +3698,7 @@ SERVER_CARD = {
                             "description": "Use the state, province or country where the user works; if they have not said, ask them - never assume NSW or Australia. Jurisdiction. Determines which edition of the standard applies. Examples: 'NSW', 'England', 'California'."},
                 "topic":   {"type": "string",
                             "description": "The specific topic or subject to look up. Example: 'cable sizing for final sub-circuits', 'maximum water heater temperature', 'roof pitch minimums'."},
-                "api_key": {"type": "string", "description": "Legis-Link API key. Optional: leave empty for the free tier (50 requests/day); Pro users paste their ll_p_ key."}
+                "api_key": {"type": "string", "description": "Legis-Link API key. Optional: leave empty for the free tier (a daily question limit applies); Pro users paste their ll_p_ key."}
             }, "required": ["trade", "region", "topic"]}
         },
         {
@@ -3555,7 +3713,7 @@ SERVER_CARD = {
             "inputSchema": {"type": "object", "properties": {
                 "trade":   {"type": "string", "enum": VALID_TRADES,
                             "description": "The trade for which to list supported regions."},
-                "api_key": {"type": "string", "description": "Legis-Link API key. Optional: leave empty for the free tier (50 requests/day); Pro users paste their ll_p_ key."}
+                "api_key": {"type": "string", "description": "Legis-Link API key. Optional: leave empty for the free tier (a daily question limit applies); Pro users paste their ll_p_ key."}
             }, "required": ["trade"]}
         },
         {
@@ -5846,7 +6004,7 @@ def auth_error(reason: str) -> list[types.TextContent]:
     return [types.TextContent(type="text", text=(
         f"**Authentication Required**\n\n{reason}\n\n"
         f"Get your free API key at: {PRO_UPGRADE.replace('upgrade', '')}\n"
-        f"Free tier: 50 requests/day | Pro: $199/year, 1000 requests/day"
+        f"Free tier: {FREE_DAILY_LIMIT} questions a day | Pro: $199/year, {PRO_DAILY_LIMIT} questions a day"
     ))]
 
 
@@ -5856,7 +6014,7 @@ def rate_limit_error(result: dict, tier: str) -> list[types.TextContent]:
         f"Your {tier} tier limit resets {result['reset']}.\n"
     )
     if tier == "free":
-        msg += f"\nUpgrade to Pro for 1000 requests/day: {PRO_UPGRADE}"
+        msg += f"\nUpgrade to Pro for {PRO_DAILY_LIMIT} questions a day: {PRO_UPGRADE}"
     return [types.TextContent(type="text", text=msg)]
 
 
@@ -6118,73 +6276,82 @@ def _ll_not_english(d) -> bool:
 _LL_APP_REGIONS = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'ACT', 'TAS', 'NT', 'England', 'Scotland', 'Wales', 'Northern Ireland', 'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'Washington DC', 'Ontario', 'British Columbia', 'Alberta', 'Quebec', 'Manitoba', 'Saskatchewan', 'Nova Scotia', 'New Brunswick', 'Newfoundland', 'Prince Edward Island', 'Germany', 'France', 'Netherlands', 'Ireland', 'Spain', 'Italy', 'Belgium', 'Austria', 'Denmark', 'Sweden', 'Finland', 'Portugal', 'Poland', 'Czech Republic']
 
 
+_LL_TB_FAIL = {}   # LL-46: when a localization last failed (retried after 10 minutes)
+
+
+def _ll_tb_not_local(topic: dict, region: str) -> dict:
+    safe = dict(topic)
+    safe["_not_local"] = True
+    safe["ref"] = (topic.get("ref", "") +
+                   f"  [Not yet adapted to {region}: controls and references follow Australian guidance - check them "
+                   "against your local regulator]")
+    return safe
+
+
 async def _localize_topic(topic: dict, trade: str, region: str) -> dict:
-    """Rewrite a topic's region-specific references for the given jurisdiction.
-    Subject stays the same; standards/citations/control wording localized.
-    Cached per trade+region+day. AU topics for an AU region pass through."""
+    """Rewrite a topic's region-specific references, terms and equipment classes for the given jurisdiction.
+    Cached per trade + region (US states and Canadian provinces share one per country) + day + topic."""
     if not region or _region_in_country(region, "Australia") or region == "Australia":
         return topic  # source content is already AU-native
-    # LL-40: only the app's own regions are localized (each one costs an AI call), and US states / Canadian provinces
-    # share one localized talk per country per day.
     _canon = {r.upper(): r for r in _LL_APP_REGIONS}.get(" ".join(region.split()).upper())
     if not _canon:
-        return topic
+        return _ll_tb_not_local(topic, region)
     region = _canon
     _cc = _region_country(_canon)
-    key = (trade, _cc if _cc in ("US", "CA") else _canon, _dt.date.today().isoformat(), topic.get("title",""), "en")
+    key = (trade, _cc if _cc in ("US", "CA") else _canon, _dt.date.today().isoformat(), topic.get("title", ""), "en")
     if key in _TOOLBOX_CACHE:
         return _TOOLBOX_CACHE[key]
+    if _time_mod.time() - _LL_TB_FAIL.get(key, 0.0) < 600:
+        return _ll_tb_not_local(topic, region)
     framework = _region_framework(region)
+    place = {"US": "the United States (federal OSHA plus the state plan where one applies)",
+             "CA": "Canada (the provincial OHS regulations)"}.get(_cc, region)
     system = (
-        "You localize construction toolbox-talk safety content to a specific "
-        "jurisdiction's standards. Keep the SUBJECT and structure identical. "
-        "Rewrite ONLY the code references, standard numbers, and any control "
-        "text that cites a specific standard, so they match the target "
-        "jurisdiction's framework. Do NOT invent precise clause numbers you are "
-        "not confident about — where unsure, name the correct governing standard "
-        "and say the specific clause must be verified. Return STRICT JSON with the "
-        "same keys as the input (title, objective, hazards[risk,text,ctrl], "
-        "checklist, discussion, ref). Append to 'ref' the note "
-        "'— verify against current local edition'. "
-        "LANGUAGE: every value MUST be in English, whatever the country. Do not translate the talk into the local "
-        "language; only official names of laws and standards stay as published (e.g. CSN EN 50110-1)."
+        "You adapt a construction toolbox-talk safety briefing written for Australia so it is correct for " + place + ". "
+        "Keep the SUBJECT, the structure and the safety meaning. Rewrite every part that is specific to Australia: "
+        "laws, codes of practice and standard numbers, and ALSO terms, equipment classes and units in the hazards, "
+        "controls and checklist (for example respirator classes P1/P2/P3 become NIOSH N95 / P100 in the US and "
+        "Canada and FFP2 / FFP3 in the UK and EU; 'SWMS' becomes the local equivalent such as a job hazard analysis "
+        "or RAMS; Australian regulators become the local regulator; use local spelling). Do NOT invent clause "
+        "numbers you are not sure of - name the governing regulation and say the clause must be verified. "
+        "Return ONLY strict JSON with the same keys as the input: title, objective, hazards (list of {risk, text, "
+        "ctrl}), checklist (list of strings), discussion, ref. 'ref' lists the local laws and standards and ends with "
+        "'- verify against current local edition'. Every value in English; official names of laws and standards stay "
+        "as published."
     )
     import json as _json
-    user = (f"Jurisdiction: {region} — {framework}\nTrade: {trade}\n\n"
-            f"Localize this topic:\n{_json.dumps(topic, ensure_ascii=False)}")
+    user = (f"Jurisdiction: {region} - {framework}\nTrade: {trade}\n\n"
+            f"Adapt this topic:\n{_json.dumps({k: topic[k] for k in topic if not k.startswith('_')}, ensure_ascii=False)}")
+    loc, why = None, ""
     try:
-        result = await ask_claude(system, user)
-        # ask_claude -> _parse_llm_text returns the PARSED dict directly. For a
-        # localized topic that dict IS the topic (has hazards/ref). Only the
-        # wrapped {status,result,...} shape carries text under "result".
-        loc = None
-        if isinstance(result, dict):
-            if result.get("hazards") and result.get("ref"):
-                loc = result
-            elif isinstance(result.get("result"), str):
-                s = result["result"].strip()
-                if s.startswith("```"):
-                    import re as _re
-                    s = _re.sub(r"```json|```", "", s).strip()
-                try:
-                    loc = _json.loads(s)
-                except Exception:
-                    loc = None
-        if isinstance(loc, dict) and _ll_not_english(loc):
-            loc = None  # LL-11: never show a toolbox talk that came back in another language
-        if isinstance(loc, dict) and loc.get("hazards") and loc.get("ref"):
-            if "verify against" not in loc.get("ref", "").lower():
-                loc["ref"] = loc["ref"] + " — verify against current local edition"
-            _TOOLBOX_CACHE[key] = loc
-            return loc
-    except Exception:
-        pass
-    # safe fallback: keep subject, flag the reference as non-local
-    safe = dict(topic)
-    safe["ref"] = (topic.get("ref","") +
-                   f"  [Source standard is Australian — {region} equivalent applies; verify against local code]")
-    _TOOLBOX_CACHE[key] = safe
-    return safe
+        if _LL_TIER.get() != "pro" and (_LL_SETTINGS_STATE.get("pause_free") or _ll_spend_today() >= LL_DAILY_CAP_USD):
+            why = "free-answer ceiling reached or free answers paused"
+        else:
+            text, stop, err = await _ll_text_call(system, user, MODEL, 3000, 60.0)
+            if err and FALLBACK_MODEL and FALLBACK_MODEL != MODEL:
+                text, stop, err = await _ll_text_call(system, user, FALLBACK_MODEL, 3000, 60.0)
+            why = err
+            d = _parse_llm_text(text) if text else None
+            hz = d.get("hazards") if isinstance(d, dict) else None
+            if (isinstance(hz, list) and hz and all(isinstance(h, dict) and h.get("text") and h.get("ctrl") for h in hz)
+                    and d.get("ref") and isinstance(d.get("checklist"), list) and d["checklist"]):
+                loc = {k: d.get(k) or topic.get(k) for k in ("title", "objective", "hazards", "checklist", "discussion", "ref")}
+                for h, h0 in zip(loc["hazards"], topic.get("hazards") or []):
+                    h["risk"] = str(h.get("risk") or h0.get("risk", "MED")).upper()
+                if _ll_not_english(loc):
+                    loc, why = None, "came back in another language"
+            elif not why:
+                why = "answer was not in the expected format"
+    except Exception as ex:
+        loc, why = None, f"error: {ex}"
+    if loc:
+        if "verify against" not in str(loc.get("ref", "")).lower():
+            loc["ref"] = str(loc["ref"]) + " - verify against current local edition"
+        _TOOLBOX_CACHE[key] = loc
+        return loc
+    logging.warning(f"Toolbox talk not localized for {region} ({trade}): {why}")
+    _LL_TB_FAIL[key] = _time_mod.time()
+    return _ll_tb_not_local(topic, region)
 
 def get_daily_toolbox(trade: str) -> dict:
     """Get today's toolbox topic for a given trade (region-neutral subject)."""
@@ -6392,6 +6559,7 @@ def run_http():
             auth    = validate_api_key(api_key)
             if not auth["valid"] or auth["tier"] != "pro":
                 return JSONResponse({"error": "Pro required", "upgrade": PRO_UPGRADE}, status_code=403)
+            _LL_TIER.set("pro")   # LL-46: a paying customer's toolbox talk is never held back by the free-answer ceiling
             trade  = request.query_params.get("trade", "Electrical")
             region = request.query_params.get("region", "").strip()
             if region:
@@ -6401,154 +6569,12 @@ def run_http():
             if not topic:
                 return JSONResponse({"error": f"No topic for {trade}"}, status_code=404)
             try:
-                import io as _io
-                from reportlab.lib.pagesizes import A4
-                from reportlab.lib import colors as _colors
-                from reportlab.lib.units import mm
-                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-                from reportlab.lib.styles import ParagraphStyle
-                from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-
-                buf = _io.BytesIO()
-                doc = SimpleDocTemplate(buf, pagesize=A4,
-                    leftMargin=15*mm, rightMargin=15*mm,
-                    topMargin=12*mm, bottomMargin=15*mm)
-                W, H = A4
-                PW = W - 30*mm
-
-                NAVY  = _colors.HexColor("#0a2540")
-                BLUE  = _colors.HexColor("#1a6fd4")
-                LBLUE = _colors.HexColor("#e8f0fb")
-                GREEN = _colors.HexColor("#0d7a55")
-                LGRN  = _colors.HexColor("#e6f5ee")
-                AMBER = _colors.HexColor("#b45309")
-                LAMB  = _colors.HexColor("#fef3c7")
-                RED   = _colors.HexColor("#b91c1c")
-                LRED  = _colors.HexColor("#fee2e2")
-                LGRAY = _colors.HexColor("#f8f9fa")
-                GRAY  = _colors.HexColor("#6b7280")
-                DGRAY = _colors.HexColor("#374151")
-                BOR   = _colors.HexColor("#e5e7eb")
-
-                def S(name, **kw): return ParagraphStyle(name, **kw)
-                SB = S("b", fontName="Helvetica-Bold", fontSize=10, textColor=DGRAY, leading=14)
-                SR = S("r", fontName="Helvetica",      fontSize=10, textColor=DGRAY, leading=14)
-                SS = S("s", fontName="Helvetica",      fontSize=9,  textColor=GRAY,  leading=12)
-                SM = S("m", fontName="Helvetica",      fontSize=9,  textColor=GRAY,  leading=12)
-                SH = S("h", fontName="Helvetica-Bold", fontSize=9,  textColor=BLUE,  leading=12, spaceAfter=3)
-                SF = S("f", fontName="Helvetica",      fontSize=8,  textColor=GRAY,  leading=11, alignment=TA_CENTER)
-
-                story = []
-
-                # Header
-                ht = Table([[
-                    Paragraph(f"<font color='white'><b>LEGIS-LINK</b> — Toolbox Talk</font>", S("hh", fontName="Helvetica-Bold", fontSize=14, textColor=_colors.white, leading=18)),
-                    Paragraph(f"<font color='white'>{trade} · {region} · {_dt.date.today().strftime('%d %b %Y')}</font>", S("hr", fontName="Helvetica", fontSize=11, textColor=_colors.white, leading=14, alignment=TA_RIGHT)),
-                ]], colWidths=[PW*0.6, PW*0.4])
-                ht.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),NAVY),("PADDING",(0,0),(-1,-1),10)]))
-                story.append(ht)
-                story.append(Spacer(1,4*mm))
-
-                # Title
-                tt = Table([[Paragraph(topic["title"], S("tt", fontName="Helvetica-Bold", fontSize=16, textColor=NAVY, leading=20))]], colWidths=[PW])
-                tt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),LBLUE),("PADDING",(0,0),(-1,-1),10),("LINEBELOW",(0,0),(-1,-1),2,BLUE)]))
-                story.append(tt)
-                story.append(Spacer(1,3*mm))
-
-                # Objective
-                story.append(Paragraph("OBJECTIVE", SH))
-                ot = Table([[Paragraph(topic["objective"], SR)]], colWidths=[PW])
-                ot.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),LBLUE),("PADDING",(0,0),(-1,-1),8)]))
-                story.append(ot)
-                story.append(Spacer(1,3*mm))
-
-                # Hazards
-                story.append(Paragraph("HAZARD REGISTER", SH))
-                rows = [[Paragraph(x, SB) for x in ["Hazard","Risk","Control","Regulation"]]]
-                for h in topic["hazards"]:
-                    rc = RED if h["risk"]=="CRITICAL" else (_colors.HexColor("#b45309") if h["risk"]=="HIGH" else GREEN)
-                    rows.append([
-                        Paragraph(h["text"], SR),
-                        Paragraph(f"<b>{h['risk']}</b>", S(f"rr{h['risk']}", fontName="Helvetica-Bold", fontSize=9, textColor=rc, alignment=TA_CENTER)),
-                        Paragraph(h["ctrl"], SS),
-                        Paragraph("", SS),
-                    ])
-                ht2 = Table(rows, colWidths=[PW*0.28, PW*0.12, PW*0.40, PW*0.20])
-                ht2.setStyle(TableStyle([
-                    ("BACKGROUND",(0,0),(-1,0),NAVY),("TEXTCOLOR",(0,0),(-1,0),_colors.white),
-                    ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,0),9),
-                    ("ROWBACKGROUNDS",(0,1),(-1,-1),[_colors.white, LGRAY]),
-                    ("GRID",(0,0),(-1,-1),0.5,BOR),("PADDING",(0,0),(-1,-1),6),("VALIGN",(0,0),(-1,-1),"TOP"),
-                ]))
-                story.append(ht2)
-                story.append(Spacer(1,3*mm))
-
-                # Checklist
-                story.append(Paragraph("PRE-START CHECKLIST", SH))
-                cr = [[
-                    Paragraph("☐", S(f"cb{i}", fontName="Helvetica", fontSize=14, textColor=BLUE, alignment=TA_CENTER)),
-                    Paragraph(c, SR),
-                    Paragraph("_________________", SM),
-                ] for i, c in enumerate(topic["checklist"])]
-                ct = Table(cr, colWidths=[PW*0.06, PW*0.70, PW*0.24])
-                ct.setStyle(TableStyle([
-                    ("ROWBACKGROUNDS",(0,0),(-1,-1),[_colors.white,LGRAY]),
-                    ("GRID",(0,0),(-1,-1),0.5,BOR),("PADDING",(0,0),(-1,-1),6),
-                ]))
-                story.append(ct)
-                story.append(Spacer(1,3*mm))
-
-                # Discussion
-                story.append(Paragraph("DISCUSSION QUESTION", SH))
-                dt2 = Table([[Paragraph(topic["discussion"], S("dq", fontName="Helvetica-BoldOblique", fontSize=10, textColor=AMBER, leading=15))]], colWidths=[PW])
-                dt2.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),LAMB),("PADDING",(0,0),(-1,-1),10),("LINERIGHT",(0,0),(0,-1),3,AMBER)]))
-                story.append(dt2)
-                story.append(Spacer(1,3*mm))
-
-                # Ref
-                story.append(Paragraph("REGULATORY REFERENCE", SH))
-                story.append(Paragraph(topic["ref"], S("ref", fontName="Helvetica", fontSize=9, textColor=BLUE, leading=13)))
-                story.append(Spacer(1,3*mm))
-
-                # Sign-off
-                story.append(Paragraph("FOREMAN SIGN-OFF", SH))
-                sg = Table([
-                    [Paragraph("<b>Foreman:</b>", SR), Paragraph("_"*30, SM), Paragraph("<b>Licence:</b>", SR), Paragraph("_"*20, SM)],
-                    [Paragraph("<b>Signature:</b>", SR), Paragraph("_"*30, SM), Paragraph("<b>Time:</b>", SR), Paragraph("_"*20, SM)],
-                ], colWidths=[PW*0.15, PW*0.35, PW*0.15, PW*0.35])
-                sg.setStyle(TableStyle([("GRID",(0,0),(-1,-1),0.5,BOR),("PADDING",(0,0),(-1,-1),7),("BACKGROUND",(0,0),(-1,-1),LGRAY)]))
-                story.append(sg)
-                story.append(Spacer(1,2*mm))
-
-                # Attendance
-                story.append(Paragraph("CREW ATTENDANCE", SH))
-                ah = [[Paragraph(x, SB) for x in ["Name","Role","Licence / ID","Signature","Time"]]]
-                ar = ah + [[Paragraph("",SR)]*5 for _ in range(8)]
-                at = Table(ar, colWidths=[PW*0.25, PW*0.18, PW*0.22, PW*0.25, PW*0.10])
-                at.setStyle(TableStyle([
-                    ("BACKGROUND",(0,0),(-1,0),NAVY),("TEXTCOLOR",(0,0),(-1,0),_colors.white),
-                    ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,0),9),
-                    ("ROWBACKGROUNDS",(0,1),(-1,-1),[_colors.white,LGRAY]),
-                    ("GRID",(0,0),(-1,-1),0.5,BOR),("PADDING",(0,0),(-1,-1),8),
-                ]))
-                story.append(at)
-                story.append(Spacer(1,3*mm))
-
-                # Footer
-                ft = Table([[
-                    Paragraph("Generated by Legis-Link — legis-link.com", SF),
-                    Paragraph("Preliminary compliance briefing. Verify against current published standards.", SF),
-                ]], colWidths=[PW*0.5, PW*0.5])
-                ft.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),LGRAY),("PADDING",(0,0),(-1,-1),6),("LINEABOVE",(0,0),(-1,0),1,BLUE)]))
-                story.append(ft)
-
-                doc.build(story)
-                pdf_bytes = buf.getvalue()
-                filename = f"Toolbox_{trade.replace(' ','_')}_{region}_{_dt.date.today()}.pdf"
+                pdf_bytes = _ll_toolbox_pdf(topic, trade, region)   # LL-46
+                filename = re.sub(r"[^A-Za-z0-9_.-]", "_", f"Toolbox_{trade}_{region or 'all'}_{_dt.date.today()}.pdf")
                 return _Resp(
                     content=pdf_bytes,
                     media_type="application/pdf",
-                    headers={"Content-Disposition": f"attachment; filename={filename}"}
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'}
                 )
             except Exception as e:
                 logging.error(f"Toolbox PDF error: {e}")
@@ -6621,6 +6647,9 @@ def run_http():
             })
 
         async def handle_server_card(request):
+            SERVER_CARD["authentication"]["tiers"] = {   # LL-46: the real limits
+                "free": f"{FREE_DAILY_LIMIT} questions a day, 3 tools - no key needed",
+                "pro": f"$199/year, {PRO_DAILY_LIMIT} questions a day, all 8 tools - https://rickyfarmer.gumroad.com/l/Legis-LinkPro"}
             return JSONResponse(SERVER_CARD)
 
         async def handle_app(request):
@@ -6640,7 +6669,7 @@ def run_http():
             if not html:
                 html = "<html><body><h1>Connect</h1></body></html>"
             html = html.encode("utf-8", errors="replace").decode("utf-8")
-            return HTMLResponse(html)
+            return HTMLResponse(_ll_fix_pages(html))   # LL-46: real limits on the connect page too
 
 
 
