@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.32.0"
+VERSION           = "3.33.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -490,6 +490,262 @@ async def _ll_privacy_route(request):
 async def _ll_terms_route(request):
     from starlette.responses import HTMLResponse
     return HTMLResponse(_ll_terms_html())
+
+
+# LL-44: admin dashboard at /admin. Password = the Railway variable LEGIS_ADMIN_SECRET (never stored or shown).
+# A signed session cookie (8 hours, HttpOnly, SameSite=Strict, Secure on https) keeps you signed in. Five wrong
+# passwords from one address lock that address out for 15 minutes. Every admin action needs the session cookie AND a
+# custom header, so other websites cannot trigger them.
+_LL_ADMIN_FAILS = {}
+_LL_ADMIN_TTL = 8 * 3600
+
+
+def _ll_admin_secret() -> str:
+    return os.environ.get("LEGIS_ADMIN_SECRET", "")
+
+
+def _ll_admin_token(exp: int) -> str:
+    import hmac as _h
+    sig = _h.new(_ll_admin_secret().encode(), f"ll-admin|{exp}".encode(), hashlib.sha256).hexdigest()
+    return f"{exp}.{sig}"
+
+
+def _ll_admin_ok(request) -> bool:
+    import hmac as _h
+    if not _ll_admin_secret():
+        return False
+    tok = request.cookies.get("ll_admin", "")
+    try:
+        exp_s, sig = tok.split(".", 1)
+        exp = int(exp_s)
+    except ValueError:
+        return False
+    if exp < _time_mod.time():
+        return False
+    return _h.compare_digest(_ll_admin_token(exp), tok)
+
+
+def _ll_admin_action_ok(request) -> bool:
+    return _ll_admin_ok(request) and request.headers.get("x-ll-admin") == "1"
+
+
+def _ll_admin_locked(ip: str) -> bool:
+    now = _time_mod.time()
+    fails = [t for t in _LL_ADMIN_FAILS.get(ip, []) if now - t < 900]
+    _LL_ADMIN_FAILS[ip] = fails
+    return len(fails) >= 5
+
+
+def _ll_mask_key(k) -> str:
+    k = str(k or "")
+    return (k[:8] + "..." + k[-4:]) if len(k) > 14 else ("***" if k else "")
+
+
+_LL_ADMIN_LOGIN_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="robots" content="noindex"/>
+<title>Admin - Legis-Link</title><style>__CSS__ form{max-width:360px} input{width:100%;padding:10px;margin:8px 0 12px;
+border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:16px}
+button{padding:10px 18px;border-radius:8px;border:0;background:var(--accent);color:#0F1B2D;font-weight:600;font-size:15px}
+.err{color:#e5484d}</style></head><body><main><h1>Legis-Link admin</h1><p class="muted">Sign in with the admin secret
+(the LEGIS_ADMIN_SECRET value from Railway).</p>__ERR__<form method="post" action="/admin/login">
+<label>Admin secret<input type="password" name="secret" autocomplete="current-password" required autofocus></label>
+<button type="submit">Sign in</button></form></main></body></html>"""
+
+_LL_ADMIN_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="robots" content="noindex"/>
+<title>Admin - Legis-Link</title><style>__CSS__
+main{max-width:1080px} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.tile .v{font-size:24px;font-weight:700;margin-top:2px}.tile .l{color:var(--muted);font-size:13px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.bar{display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0}.bar span:first-child{width:120px;flex:none;
+overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}.bar i{height:12px;background:var(--accent);
+border-radius:3px;display:inline-block;min-width:2px}
+.chart{display:flex;align-items:flex-end;gap:4px;height:120px;border-bottom:1px solid var(--line);padding-top:8px}
+.chart .col{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:1px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
+.chart .col i{display:block;background:#e5484d}.days{display:flex;gap:4px;font-size:10px;color:var(--muted)}.days span{flex:1;text-align:center}
+.wrap{overflow-x:auto}button,.btn{padding:7px 12px;border-radius:7px;border:1px solid var(--line);background:var(--card);
+color:var(--ink);cursor:pointer;font-size:13px}button.primary{background:var(--accent);color:#0F1B2D;border:0;font-weight:600}
+input[type=email]{padding:8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink);width:240px}
+.ok{color:#30a46c}.bad{color:#e5484d}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+code{font-size:13px;word-break:break-all}
+</style></head><body><main>
+<header><h1>Legis-Link admin</h1><div><button onclick="load()">Refresh</button>
+<button onclick="logout()">Sign out</button></div></header>
+<p class="muted" id="when"></p>
+<h2>Service</h2><div class="grid" id="svc"></div>
+<h2>Today</h2><div class="grid" id="today"></div>
+<h2>Requests, last 14 days</h2><div class="chart" id="chart"></div><div class="days" id="days"></div>
+<p class="muted">Bar height = all requests; the red part = errors and refused requests (limits, wrong keys). Counts come from the request log; question text is never stored.</p>
+<div class="two"><div><h2>By tool (7 days)</h2><div id="tools"></div></div><div><h2>By trade (7 days)</h2><div id="trades"></div></div>
+<div><h2>By region (7 days)</h2><div id="regions"></div></div><div><h2>By result (7 days)</h2><div id="statuses"></div></div></div>
+<h2>Pro customers</h2>
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
+<input type="email" id="newemail" placeholder="customer email"><button class="primary" onclick="issue()">Issue Pro key</button>
+<span id="issued"></span></div>
+<div class="wrap"><table id="keys"></table></div>
+<h2>Latest requests</h2><div class="wrap"><table id="recent"></table></div>
+</main><script>
+const H={'x-ll-admin':'1','content-type':'application/json'};
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+document.addEventListener('click',e=>{if(e.target.classList&&e.target.classList.contains('rv'))revoke(e.target.dataset.email);});
+function tiles(el,items){$(el).innerHTML=items.map(([l,v,c])=>`<div class="tile"><div class="l">${esc(l)}</div><div class="v ${c||''}">${esc(v)}</div></div>`).join('');}
+function bars(el,rows){const m=Math.max(1,...rows.map(r=>r[1]));$(el).innerHTML=rows.length?rows.map(([k,n])=>`<div class="bar"><span title="${esc(k)}">${esc(k||'(none)')}</span><i style="width:${Math.round(n/m*100)}%"></i><b>${n}</b></div>`).join(''):'<p class="muted">No data yet.</p>';}
+async function load(){
+ const r=await fetch('/admin/api/stats',{headers:H}); if(r.status==401){location.href='/admin';return;}
+ const d=await r.json(); $('when').textContent='Updated '+new Date().toLocaleString();
+ const s=d.service; tiles('svc',[['Version',s.version],['Model',s.model],['Backup model',s.fallback],['Thinking effort',s.effort],
+  ['Eval score',s.eval_score+' ('+s.eval_date+')'],['Free / Pro limit',s.free_limit+' / '+s.pro_limit+' a day'],
+  ['Daily AI ceiling','$'+s.cap_usd],['Database',s.database?'connected':'NOT SET',s.database?'ok':'bad']]);
+ const t=d.today; tiles('today',[['Est. AI spend',`$${t.spend_usd.toFixed(2)} of $${s.cap_usd}`,t.spend_usd>=s.cap_usd?'bad':''],
+  ['AI calls',t.ai_calls],['Answers in cache',t.cache_entries],['Requests',t.requests],['Free visitors',t.free_visitors],
+  ['Errors / refused',t.errors,t.errors?'bad':'']]);
+ const days=d.daily, mx=Math.max(1,...days.map(x=>x.total));
+ $('chart').innerHTML=days.map(x=>`<div class="col" title="${x.day}: ${x.total} requests, ${x.errors} errors or refused" style="height:${Math.round(x.total/mx*100)}%"><i style="height:${x.total?Math.round(x.errors/x.total*100):0}%"></i></div>`).join('');
+ $('days').innerHTML=days.map(x=>`<span>${x.day.slice(8)}</span>`).join('');
+ bars('tools',d.by_tool); bars('trades',d.by_trade); bars('regions',d.by_region); bars('statuses',d.by_status);
+ $('keys').innerHTML='<tr><th>Email</th><th>Key</th><th>Source</th><th>Since</th><th>Status</th><th></th></tr>'+(d.keys.length?d.keys.map(k=>
+  `<tr><td>${esc(k.email)}</td><td><code>${esc(k.key)}</code></td><td>${esc(k.sale)}</td><td>${esc(k.created)}</td>
+   <td class="${k.active?'ok':'bad'}">${k.active?'active':'revoked'}</td><td>${k.active?`<button class="rv" data-email="${esc(k.email)}">Revoke</button>`:''}</td></tr>`).join(''):'<tr><td colspan="6" class="muted">No Pro customers yet.</td></tr>');
+ $('recent').innerHTML='<tr><th>Time (UTC)</th><th>Tier</th><th>Tool</th><th>Trade</th><th>Region</th><th>Result</th></tr>'+d.recent.map(x=>
+  `<tr><td>${esc(x.ts)}</td><td>${esc(x.tier)}</td><td>${esc(x.tool)}</td><td>${esc(x.trade)}</td><td>${esc(x.region)}</td><td>${esc(x.status)}</td></tr>`).join('');
+}
+async function issue(){const email=$('newemail').value.trim(); if(!email)return;
+ if(!confirm('Issue a Pro key for '+email+'?'))return;
+ const r=await fetch('/admin/api/keys/issue',{method:'POST',headers:H,body:JSON.stringify({email})}); const d=await r.json();
+ $('issued').innerHTML=d.pro_key?`Key for ${esc(d.email)}: <code>${esc(d.pro_key)}</code> (copy it now - it is shown once)`:`<span class="bad">${esc(d.error||'Failed')}</span>`; load();}
+async function revoke(email){ if(!confirm('Revoke the Pro key for '+email+'? Their Pro access stops straight away.'))return;
+ await fetch('/admin/api/keys/revoke',{method:'POST',headers:H,body:JSON.stringify({email})}); load();}
+async function logout(){await fetch('/admin/logout',{method:'POST',headers:H}); location.href='/admin';}
+load();
+</script></body></html>"""
+
+
+def _ll_admin_page(tpl: str, err: str = "") -> str:
+    return tpl.replace("__CSS__", _LL_LEGAL_CSS).replace("__ERR__", f'<p class="err">{err}</p>' if err else "")
+
+
+async def _ll_admin_home(request):
+    from starlette.responses import HTMLResponse
+    if not _ll_admin_secret():
+        return HTMLResponse("Not found", status_code=404)
+    if not _ll_admin_ok(request):
+        return HTMLResponse(_ll_admin_page(_LL_ADMIN_LOGIN_HTML), headers={"Cache-Control": "no-store"})
+    return HTMLResponse(_ll_admin_page(_LL_ADMIN_HTML), headers={"Cache-Control": "no-store"})
+
+
+async def _ll_admin_login(request):
+    import hmac as _h
+    from starlette.responses import HTMLResponse, RedirectResponse
+    if not _ll_admin_secret():
+        return HTMLResponse("Not found", status_code=404)
+    ip = _client_ip(request) or "unknown"
+    if _ll_admin_locked(ip):
+        return HTMLResponse(_ll_admin_page(_LL_ADMIN_LOGIN_HTML, "Too many attempts. Try again in 15 minutes."), status_code=429)
+    form = await request.form()
+    if not _h.compare_digest(str(form.get("secret", "")), _ll_admin_secret()):
+        _LL_ADMIN_FAILS.setdefault(ip, []).append(_time_mod.time())
+        logging.warning("Admin sign-in failed")
+        return HTMLResponse(_ll_admin_page(_LL_ADMIN_LOGIN_HTML, "That secret is not correct."), status_code=401)
+    _LL_ADMIN_FAILS.pop(ip, None)
+    exp = int(_time_mod.time()) + _LL_ADMIN_TTL
+    resp = RedirectResponse("/admin", status_code=303)
+    https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "") == "https"
+    resp.set_cookie("ll_admin", _ll_admin_token(exp), max_age=_LL_ADMIN_TTL, httponly=True, samesite="strict",
+                    secure=https, path="/admin")
+    logging.warning("Admin signed in")
+    return resp
+
+
+async def _ll_admin_logout(request):
+    from starlette.responses import JSONResponse as _J
+    resp = _J({"ok": True})
+    resp.delete_cookie("ll_admin", path="/admin")
+    return resp
+
+
+def _ll_admin_stats() -> dict:
+    import datetime as _d
+    today = _d.date.today().isoformat()
+    out = {
+        "service": {"version": VERSION, "model": MODEL, "fallback": FALLBACK_MODEL,
+                    "effort": LL_EFFORT if str(MODEL).startswith("claude-sonnet-5") else "not used by this model",
+                    "eval_score": _LL_EVAL["score"], "eval_date": _LL_EVAL["date"], "free_limit": FREE_DAILY_LIMIT,
+                    "pro_limit": PRO_DAILY_LIMIT, "cap_usd": LL_DAILY_CAP_USD, "database": bool(DATABASE_URL)},
+        "today": {"spend_usd": _ll_spend_today(),
+                  "ai_calls": _LL_SPEND["calls"] if _LL_SPEND.get("day") == today else 0,
+                  "cache_entries": len(_LL_ANS_CACHE), "requests": 0, "free_visitors": 0, "errors": 0},
+        "daily": [], "by_tool": [], "by_trade": [], "by_region": [], "by_status": [], "recent": [], "keys": [],
+    }
+    bad = "('AUTH_FAIL','PRO_REQUIRED','RATE_LIMITED','ERROR','REJECTED_BAD_SECRET')"
+    if not DATABASE_URL:
+        return out
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT to_char(d, 'YYYY-MM-DD'), COALESCE(t.n, 0), COALESCE(t.e, 0) FROM generate_series("
+                        "CURRENT_DATE - 13, CURRENT_DATE, INTERVAL '1 day') d LEFT JOIN (SELECT (ts AT TIME ZONE 'UTC')::date dd, "
+                        "COUNT(*) n, COUNT(*) FILTER (WHERE status IN " + bad + ") e FROM legis_link_audit "
+                        "WHERE ts >= NOW() - INTERVAL '15 days' AND tool <> 'webhook_sale' GROUP BY 1) t ON t.dd = d::date ORDER BY d")
+            out["daily"] = [{"day": a, "total": int(b), "errors": int(c)} for a, b, c in cur.fetchall()]
+            if out["daily"]:
+                out["today"]["requests"] = out["daily"][-1]["total"]
+                out["today"]["errors"] = out["daily"][-1]["errors"]
+            for key, col in (("by_tool", "tool"), ("by_trade", "trade"), ("by_region", "region"), ("by_status", "status")):
+                cur.execute(f"SELECT COALESCE({col}, ''), COUNT(*) FROM legis_link_audit WHERE ts >= NOW() - INTERVAL '7 days' "
+                            f"AND tool <> 'webhook_sale' GROUP BY 1 ORDER BY 2 DESC LIMIT 10")
+                out[key] = [[a, int(b)] for a, b in cur.fetchall()]
+            cur.execute("SELECT to_char(ts AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), tier, tool, trade, region, status "
+                        "FROM legis_link_audit ORDER BY ts DESC LIMIT 30")
+            out["recent"] = [dict(zip(("ts", "tier", "tool", "trade", "region", "status"), r)) for r in cur.fetchall()]
+            cur.execute("SELECT COUNT(*) FROM legis_link_free_usage WHERE date_utc = CURRENT_DATE")
+            out["today"]["free_visitors"] = int(cur.fetchone()[0])
+            cur.execute("SELECT email, api_key, sale_id, active, to_char(created_at, 'YYYY-MM-DD') FROM legis_link_keys "
+                        "ORDER BY created_at DESC LIMIT 200")
+            out["keys"] = [{"email": e, "key": _ll_mask_key(k), "sale": s or "", "active": bool(a), "created": c or ""}
+                           for e, k, s, a, c in cur.fetchall()]
+    except Exception as e:
+        logging.warning(f"Admin stats: {e}")
+    return out
+
+
+async def _ll_admin_api_stats(request):
+    from starlette.responses import JSONResponse as _J
+    if not _ll_admin_action_ok(request):
+        return _J({"error": "Unauthorized"}, status_code=401)
+    import asyncio as _aio
+    data = await _aio.get_running_loop().run_in_executor(None, _ll_admin_stats)
+    return _J(data, headers={"Cache-Control": "no-store"})
+
+
+async def _ll_admin_api_issue(request):
+    from starlette.responses import JSONResponse as _J
+    if not _ll_admin_action_ok(request):
+        return _J({"error": "Unauthorized"}, status_code=401)
+    body = await request.json()
+    email = str(body.get("email", "")).strip().lower()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return _J({"error": "Enter a valid email address."}, status_code=400)
+    if not KEY_SECRET:
+        return _J({"error": "LEGIS_KEY_SECRET is not set in Railway."}, status_code=500)
+    key = generate_pro_key(email)
+    _store_key(email, key, "admin", "manual")
+    logging.warning("Admin issued a Pro key")
+    return _J({"email": email, "pro_key": key})
+
+
+async def _ll_admin_api_revoke(request):
+    from starlette.responses import JSONResponse as _J
+    if not _ll_admin_action_ok(request):
+        return _J({"error": "Unauthorized"}, status_code=401)
+    body = await request.json()
+    email = str(body.get("email", "")).strip().lower()
+    if not email:
+        return _J({"error": "email required"}, status_code=400)
+    _revoke_key(email)
+    _KEY_CACHE.clear()
+    logging.warning("Admin revoked a Pro key")
+    return _J({"email": email, "revoked": True})
 
 
 def validate_api_key(key: str | None) -> dict:
@@ -2649,7 +2905,7 @@ def _ll_canonical(app):
 
 async def _ll_robots(request):
     from starlette.responses import PlainTextResponse as _P
-    return _P("User-agent: *\nAllow: /\nSitemap: " + PUBLIC_URL + "/sitemap.xml\n")
+    return _P("User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: " + PUBLIC_URL + "/sitemap.xml\n")   # LL-44
 
 
 # LL-15: proof for the official MCP Registry that we own legis-link.com (public key only, set in Railway)
@@ -5757,6 +6013,12 @@ def run_http():
             Route("/app",           handle_app),
             Route("/connect",       handle_connect_page),
             Route("/privacy",       _ll_privacy_route),   # LL-42
+            Route("/admin",                 _ll_admin_home),                          # LL-44
+            Route("/admin/login",           _ll_admin_login,      methods=["POST"]),
+            Route("/admin/logout",          _ll_admin_logout,     methods=["POST"]),
+            Route("/admin/api/stats",       _ll_admin_api_stats),
+            Route("/admin/api/keys/issue",  _ll_admin_api_issue,  methods=["POST"]),
+            Route("/admin/api/keys/revoke", _ll_admin_api_revoke, methods=["POST"]),
             Route("/tools",         _ll_tools_route),         # LL-43
             Route("/corrections",   _ll_corrections_route),   # LL-43
             Route("/terms",         _ll_terms_route),     # LL-42
