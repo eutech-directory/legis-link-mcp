@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.33.0"
+VERSION           = "3.34.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -291,6 +291,8 @@ def _gumroad_license_check(k: str):
             return hit[1], hit[2]
         return False, "Could not check your Pro key with Gumroad just now. Please try again in a minute."
     p = d.get("purchase") or {}
+    if d.get("success") and p.get("email"):   # LL-45: who this licence key belongs to (admin Users tab)
+        _LL_GR_EMAIL[hashlib.sha256(k.encode()).hexdigest()[:32]] = str(p.get("email"))[:200].strip().lower()
     ok, reason = True, "pro"
     if not d.get("success"):
         ok, reason = False, "This Pro key is not recognised. Check it was copied in full, or email info@legis-link.com."
@@ -349,13 +351,18 @@ def _ll_fix_pages(html: str) -> str:
     html = html.replace('<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a></p>',   # LL-42
                         '<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a> &bull; '
                         '<a href="/tools">Free calculators</a> &bull; '   # LL-43
-                        '<a href="/privacy">Privacy</a> &bull; <a href="/terms">Terms</a></p>')
+                        '<a href="/privacy">Privacy</a> &bull; <a href="/terms">Terms</a> &bull; '
+                        '<a href="/corrections#report">Report a mistake</a></p>')   # LL-45
+    _ll_settings_refresh()
+    _bn = _ll_banner_html()
+    if _bn:
+        html = re.sub(r"(<body[^>]*>)", lambda m: m.group(1) + _bn, html, count=1)
     return html
 
 
 # LL-42: privacy notice and terms of use pages (/privacy, /terms). Every statement matches what the code does.
 _LL_OPERATOR = os.environ.get("LEGIS_OPERATOR", "") or "NANO AI Agency (Kenya)"
-_LL_LEGAL_UPDATED = "1 November 2026"
+_LL_LEGAL_UPDATED = "2 November 2026"
 _LL_LEGAL_CSS = """
 :root{--bg:#0F1B2D;--card:#16253B;--ink:#F6F3EC;--muted:#A9B4C4;--accent:#FFC72C;--line:rgba(246,243,236,.14)}
 @media (prefers-color-scheme: light){:root{--bg:#F6F3EC;--card:#FFFFFF;--ink:#0F1B2D;--muted:#4A5568;--accent:#B7791F;--line:rgba(15,27,45,.14)}}
@@ -392,7 +399,17 @@ no token, a one-way hash of your IP address - never the IP itself)</td><td>The f
 <td>30 days</td></tr>
 <tr><td>Daily request counts per key or visitor, stored as one-way hashes</td><td>Daily limits for free and Pro ({pro} a day)</td><td>Kept as anonymous totals</td></tr>
 <tr><td>A service record for each request: time, version, the first 8 characters of the key (if any), tier, tool, trade,
-region and result status - <b>not</b> the question or the answer</td><td>Reliability, abuse prevention and usage figures</td><td>While needed for those purposes</td></tr>
+region, result status, how it was sent (web app, API or MCP), the name of the MCP app if one was used (for example
+Claude or Cursor) and the country our network provider reports - <b>not</b> the question, the answer or your IP
+address</td><td>Reliability, abuse prevention and usage figures</td><td>While needed for those purposes</td></tr>
+<tr><td>A usage summary for each Pro key and each free visitor, identified by a one-way hash: plan, how they connect,
+MCP app name, country, first and last visit, and request counts. For Pro keys, the email linked to the key (for a
+Gumroad licence key, the email Gumroad returns when we check the key)</td><td>Seeing how the service is used, support,
+and abuse prevention</td><td>Free visitors: deleted 30 days after the last visit. Pro: while you are a customer</td></tr>
+<tr><td>Mistake reports you send on the <a href="/corrections#report">report form</a>: the question, trade, region, what
+was wrong, your suggested correction and (optional) your email</td><td>Checking and fixing answers, and replying to you.
+A short version of the question may be published on the corrections page - never your email</td><td>Up to 12 months
+after the report is closed</td></tr>
 <tr><td>For Pro customers: email address, Pro key, Gumroad sale ID and product, received from Gumroad when you buy</td>
 <td>Issuing and checking your Pro key; refunds</td><td>While you are a customer, then as needed for records</td></tr>
 </table>
@@ -400,7 +417,7 @@ region and result status - <b>not</b> the question or the answer</td><td>Reliabi
 <h2>Your questions and answers</h2>
 <p>To answer a question, its text (with the trade and region you chose) is sent to our AI provider, Anthropic, which
 processes it under its commercial API terms. If Anthropic is unavailable for billing reasons and a backup provider is
-configured, OpenAI may be used instead. We do not save the question text. A copy of an answer may be kept in the
+configured, OpenAI may be used instead. We do not save the question text (unless you send it to us in a mistake report). A copy of an answer may be kept in the
 server's memory for up to 7 days so the same question is not paid for twice; it is not linked to you and is cleared
 whenever the server restarts.</p>
 
@@ -554,70 +571,215 @@ button{padding:10px 18px;border-radius:8px;border:0;background:var(--accent);col
 _LL_ADMIN_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="robots" content="noindex"/>
 <title>Admin - Legis-Link</title><style>__CSS__
-main{max-width:1080px} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
+main{max-width:1180px} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:12px 0}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.tile .v{font-size:24px;font-weight:700;margin-top:2px}.tile .l{color:var(--muted);font-size:13px}
+.tile .v{font-size:22px;font-weight:700;margin-top:2px;overflow-wrap:anywhere}.tile .l{color:var(--muted);font-size:13px}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
-.bar{display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0}.bar span:first-child{width:120px;flex:none;
+.bar{display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0}.bar span:first-child{width:130px;flex:none;
 overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}.bar i{height:12px;background:var(--accent);
 border-radius:3px;display:inline-block;min-width:2px}
 .chart{display:flex;align-items:flex-end;gap:4px;height:120px;border-bottom:1px solid var(--line);padding-top:8px}
 .chart .col{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:1px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
 .chart .col i{display:block;background:#e5484d}.days{display:flex;gap:4px;font-size:10px;color:var(--muted)}.days span{flex:1;text-align:center}
 .wrap{overflow-x:auto}button,.btn{padding:7px 12px;border-radius:7px;border:1px solid var(--line);background:var(--card);
-color:var(--ink);cursor:pointer;font-size:13px}button.primary{background:var(--accent);color:#0F1B2D;border:0;font-weight:600}
-input[type=email]{padding:8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink);width:240px}
-.ok{color:#30a46c}.bad{color:#e5484d}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+color:var(--ink);cursor:pointer;font-size:13px;text-decoration:none;display:inline-block}button.primary{background:var(--accent);color:#0F1B2D;border:0;font-weight:600}
+input,select,textarea{padding:8px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px}
+.ok{color:#30a46c}.bad{color:#e5484d}.warn{color:var(--accent)}header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 code{font-size:13px;word-break:break-all}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:16px 0 8px}
+nav.tabs a{padding:8px 14px;border-radius:8px 8px 0 0;color:var(--muted);text-decoration:none;font-size:14px;border:1px solid transparent;border-bottom:0}
+nav.tabs a.on{color:var(--ink);background:var(--card);border-color:var(--line);font-weight:600}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;border:1px solid var(--line);margin:1px 2px 1px 0;white-space:nowrap}
+.pill.pro{background:var(--accent);color:#0F1B2D;border:0}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#30a46c;margin-right:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.tab{display:none}.tab.on{display:block}
+.rep{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
+.rep p{margin:4px 0;white-space:pre-wrap}.rep .muted{margin:0}.set{display:grid;grid-template-columns:minmax(200px,1fr) minmax(160px,1.2fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+@media (max-width:640px){.set{grid-template-columns:1fr}}
+td.n,th.n{text-align:right}
 </style></head><body><main>
-<header><h1>Legis-Link admin</h1><div><button onclick="load()">Refresh</button>
+<header><h1>Legis-Link admin</h1><div><button onclick="show(cur,true)">Refresh</button>
 <button onclick="logout()">Sign out</button></div></header>
+<nav class="tabs" id="tabs">
+<a href="#overview" data-t="overview">Overview</a><a href="#users" data-t="users">Users</a>
+<a href="#mcp" data-t="mcp">MCP &amp; developers</a><a href="#customers" data-t="customers">Customers</a>
+<a href="#reports" data-t="reports">Reports <span id="newrep"></span></a><a href="#settings" data-t="settings">Settings</a></nav>
 <p class="muted" id="when"></p>
+
+<section class="tab" id="t-overview">
+<div class="grid" id="live"></div>
 <h2>Service</h2><div class="grid" id="svc"></div>
 <h2>Today</h2><div class="grid" id="today"></div>
 <h2>Requests, last 14 days</h2><div class="chart" id="chart"></div><div class="days" id="days"></div>
-<p class="muted">Bar height = all requests; the red part = errors and refused requests (limits, wrong keys). Counts come from the request log; question text is never stored.</p>
-<div class="two"><div><h2>By tool (7 days)</h2><div id="tools"></div></div><div><h2>By trade (7 days)</h2><div id="trades"></div></div>
-<div><h2>By region (7 days)</h2><div id="regions"></div></div><div><h2>By result (7 days)</h2><div id="statuses"></div></div></div>
-<h2>Pro customers</h2>
-<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
-<input type="email" id="newemail" placeholder="customer email"><button class="primary" onclick="issue()">Issue Pro key</button>
-<span id="issued"></span></div>
-<div class="wrap"><table id="keys"></table></div>
+<p class="muted">Bar height = all requests; the red part = errors and refused requests (limits, wrong keys). Question text is never stored.</p>
+<div class="two"><div><h2>By channel (7 days)</h2><div id="channels"></div></div><div><h2>By tool (7 days)</h2><div id="tools"></div></div>
+<div><h2>By trade (7 days)</h2><div id="trades"></div></div><div><h2>By region (7 days)</h2><div id="regions"></div></div>
+<div><h2>By result (7 days)</h2><div id="statuses"></div></div><div><h2>Alerts since the last restart</h2><div id="alerts"></div></div></div>
 <h2>Latest requests</h2><div class="wrap"><table id="recent"></table></div>
+<div class="row"><a class="btn" href="/admin/api/export?what=requests">Download requests (CSV, 30 days)</a></div>
+</section>
+
+<section class="tab" id="t-users">
+<div class="grid" id="ucount"></div>
+<div class="row"><label>Seen <select id="uwin"><option value="now">in the last 15 minutes (active now)</option>
+<option value="today" selected>today</option><option value="7d">in the last 7 days</option><option value="30d">in the last 30 days</option></select></label>
+<label>Plan <select id="ukind"><option value="">all</option><option value="pro">Pro</option><option value="free">Free</option>
+<option value="test">Test key</option><option value="admin">Admin</option></select></label>
+<a class="btn" href="/admin/api/export?what=users">Download users (CSV)</a></div>
+<p class="muted">There is no sign-in for users: each Pro key, and each free visitor's browser or address, counts as one user (stored as a
+one-way hash). "Active now" = a request in the last 15 minutes. Anonymous visitors are deleted 30 days after their last visit.</p>
+<div class="wrap"><table id="users"></table></div>
+</section>
+
+<section class="tab" id="t-mcp">
+<div class="grid" id="mcount"></div>
+<h2>MCP apps connecting (30 days)</h2><div class="wrap"><table id="apps"></table></div>
+<div class="two"><div><h2>MCP calls by app (30 days)</h2><div id="mcalls"></div></div><div><h2>MCP calls by tool (30 days)</h2><div id="mtools"></div></div></div>
+<h2>MCP calls, last 14 days</h2><div class="chart" id="mchart"></div><div class="days" id="mdays"></div>
+<h2>Developers using MCP (30 days)</h2><div class="wrap"><table id="devs"></table></div>
+<h2>Latest MCP connections (since the last restart)</h2><div class="wrap"><table id="events"></table></div>
+<p class="muted">The app name and version come from the MCP "initialize" message the app sends (for example Claude, Cursor or VS Code).</p>
+</section>
+
+<section class="tab" id="t-customers">
+<h2>Issue a Pro key</h2>
+<div class="row"><input type="email" id="newemail" placeholder="customer email" style="width:260px">
+<button class="primary" onclick="issue()">Issue Pro key</button><span id="issued"></span></div>
+<h2>Pro customers</h2><p class="muted">Keys issued here or by the Gumroad sale webhook, plus Gumroad licence-key buyers seen using the service.</p>
+<div class="wrap"><table id="keys"></table></div>
+</section>
+
+<section class="tab" id="t-reports">
+<div class="row"><label>Show <select id="rstat"><option value="">all</option><option value="new" selected>new</option>
+<option value="reviewing">reviewing</option><option value="fixed">fixed</option><option value="rejected">rejected</option></select></label>
+<a class="btn" href="/admin/api/export?what=reports">Download reports (CSV)</a><a class="btn" href="/corrections" target="_blank">Open the public corrections page</a></div>
+<p class="muted">Reports come from the form on the corrections page. When an answer is fixed, publish a correction: it appears on
+/corrections and the answer cache is cleared. Then add the question to ll_eval.py so every update is tested against it.</p>
+<div id="reports"></div>
+<h2>Publish a correction</h2>
+<div class="rep" id="pubform"><input type="hidden" id="pid">
+<div class="row"><input id="pq" placeholder="Question (short, no personal details)" style="flex:1;min-width:240px"></div>
+<div class="row"><input id="pw" placeholder="What was wrong, and the correct answer" style="flex:1;min-width:240px"></div>
+<div class="row"><input id="pv" placeholder="Fixed in version" style="width:160px"><button class="primary" onclick="publish()">Publish</button><span id="pmsg"></span></div></div>
+<h2>Published corrections</h2><div class="wrap"><table id="corr"></table></div>
+</section>
+
+<section class="tab" id="t-settings">
+<p class="muted">Changes here take effect within a minute, with no redeploy, and override the Railway variables until you press
+"Use Railway value". Secrets are never shown here - set those in Railway.</p>
+<div id="sets"></div>
+<div class="row"><button class="primary" onclick="saveSettings()">Save changes</button><span id="smsg"></span></div>
+<h2>Answer cache</h2><p class="muted">Answers are cached for 7 days so the same question is not paid for twice. Clear it after fixing an answer.</p>
+<div class="row"><button onclick="clearCache()">Clear the answer cache</button><span id="cmsg"></span></div>
+<h2>Configuration check</h2><div class="wrap"><table id="checks"></table></div>
+</section>
 </main><script>
 const H={'x-ll-admin':'1','content-type':'application/json'};
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-document.addEventListener('click',e=>{if(e.target.classList&&e.target.classList.contains('rv'))revoke(e.target.dataset.email);});
+let cur='overview', REP={};
+async function api(name,body){const r=await fetch('/admin/api/'+name,body===undefined?{headers:H}:{method:'POST',headers:H,body:JSON.stringify(body)});
+ if(r.status==401){location.href='/admin';throw new Error('signed out');} return r.json();}
 function tiles(el,items){$(el).innerHTML=items.map(([l,v,c])=>`<div class="tile"><div class="l">${esc(l)}</div><div class="v ${c||''}">${esc(v)}</div></div>`).join('');}
 function bars(el,rows){const m=Math.max(1,...rows.map(r=>r[1]));$(el).innerHTML=rows.length?rows.map(([k,n])=>`<div class="bar"><span title="${esc(k)}">${esc(k||'(none)')}</span><i style="width:${Math.round(n/m*100)}%"></i><b>${n}</b></div>`).join(''):'<p class="muted">No data yet.</p>';}
-async function load(){
- const r=await fetch('/admin/api/stats',{headers:H}); if(r.status==401){location.href='/admin';return;}
- const d=await r.json(); $('when').textContent='Updated '+new Date().toLocaleString();
- const s=d.service; tiles('svc',[['Version',s.version],['Model',s.model],['Backup model',s.fallback],['Thinking effort',s.effort],
+function chart(el,dl,days){const mx=Math.max(1,...days.map(x=>x.total));
+ $(el).innerHTML=days.map(x=>`<div class="col" title="${x.day}: ${x.total} requests, ${x.errors} errors or refused" style="height:${Math.round(x.total/mx*100)}%"><i style="height:${x.total?Math.round(x.errors/x.total*100):0}%"></i></div>`).join('');
+ $(dl).innerHTML=days.map(x=>`<span>${x.day.slice(8)}</span>`).join('');}
+const plan=k=>`<span class="pill ${k=='pro'?'pro':''}">${esc({pro:'Pro',free:'Free',test:'Test key',admin:'Admin'}[k]||k)}</span>`;
+const pills=a=>(a||[]).map(x=>`<span class="pill">${esc(x)}</span>`).join('')||'<span class="muted">-</span>';
+const ago=s=>s<60?'just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':Math.round(s/86400)+' d ago';
+const NUM=['Users','Pro users','Connections','Requests'];
+function table(el,head,rows,empty){$(el).innerHTML='<tr>'+head.map(h=>`<th${NUM.includes(h)?' class="n"':''}>${h}</th>`).join('')+'</tr>'+(rows.length?rows.join(''):`<tr><td colspan="${head.length}" class="muted">${empty}</td></tr>`);}
+
+async function overview(){const d=await api('stats2'); const s=d.service, t=d.today;
+ $('newrep').textContent=d.reports_new?'('+d.reports_new+')':'';
+ tiles('live',[['Active now (15 min)',d.active.now,d.active.now?'ok':''],['Users today',d.active.today],['MCP users today',d.mcp_today],
+  ['New mistake reports',d.reports_new,d.reports_new?'warn':''],['Free answers',s.paused?'PAUSED':'on',s.paused?'bad':'ok']]);
+ tiles('svc',[['Version',s.version],['Model',s.model],['Backup model',s.fallback],['Thinking effort',s.effort],
   ['Eval score',s.eval_score+' ('+s.eval_date+')'],['Free / Pro limit',s.free_limit+' / '+s.pro_limit+' a day'],
   ['Daily AI ceiling','$'+s.cap_usd],['Database',s.database?'connected':'NOT SET',s.database?'ok':'bad']]);
- const t=d.today; tiles('today',[['Est. AI spend',`$${t.spend_usd.toFixed(2)} of $${s.cap_usd}`,t.spend_usd>=s.cap_usd?'bad':''],
+ tiles('today',[['Est. AI spend',`$${t.spend_usd.toFixed(2)} of $${s.cap_usd}`,t.spend_usd>=s.cap_usd?'bad':''],
   ['AI calls',t.ai_calls],['Answers in cache',t.cache_entries],['Requests',t.requests],['Free visitors',t.free_visitors],
   ['Errors / refused',t.errors,t.errors?'bad':'']]);
- const days=d.daily, mx=Math.max(1,...days.map(x=>x.total));
- $('chart').innerHTML=days.map(x=>`<div class="col" title="${x.day}: ${x.total} requests, ${x.errors} errors or refused" style="height:${Math.round(x.total/mx*100)}%"><i style="height:${x.total?Math.round(x.errors/x.total*100):0}%"></i></div>`).join('');
- $('days').innerHTML=days.map(x=>`<span>${x.day.slice(8)}</span>`).join('');
- bars('tools',d.by_tool); bars('trades',d.by_trade); bars('regions',d.by_region); bars('statuses',d.by_status);
- $('keys').innerHTML='<tr><th>Email</th><th>Key</th><th>Source</th><th>Since</th><th>Status</th><th></th></tr>'+(d.keys.length?d.keys.map(k=>
-  `<tr><td>${esc(k.email)}</td><td><code>${esc(k.key)}</code></td><td>${esc(k.sale)}</td><td>${esc(k.created)}</td>
-   <td class="${k.active?'ok':'bad'}">${k.active?'active':'revoked'}</td><td>${k.active?`<button class="rv" data-email="${esc(k.email)}">Revoke</button>`:''}</td></tr>`).join(''):'<tr><td colspan="6" class="muted">No Pro customers yet.</td></tr>');
- $('recent').innerHTML='<tr><th>Time (UTC)</th><th>Tier</th><th>Tool</th><th>Trade</th><th>Region</th><th>Result</th></tr>'+d.recent.map(x=>
-  `<tr><td>${esc(x.ts)}</td><td>${esc(x.tier)}</td><td>${esc(x.tool)}</td><td>${esc(x.trade)}</td><td>${esc(x.region)}</td><td>${esc(x.status)}</td></tr>`).join('');
-}
+ chart('chart','days',d.daily);
+ bars('channels',d.by_channel); bars('tools',d.by_tool); bars('trades',d.by_trade); bars('regions',d.by_region); bars('statuses',d.by_status);
+ $('alerts').innerHTML=d.alerts.length?d.alerts.map(a=>`<div class="bar"><span>${esc(a.ts)}</span>${esc(a.text)}</div>`).join(''):'<p class="muted">No alerts.</p>';
+ table('recent',['Time (UTC)','Tier','Channel','App','Tool','Trade','Region','Result'],d.recent.map(x=>
+  `<tr><td>${esc(x.ts)}</td><td>${esc(x.tier)}</td><td>${esc(x.channel)}</td><td>${esc(x.client)}</td><td>${esc(x.tool)}</td><td>${esc(x.trade)}</td><td>${esc(x.region)}</td><td>${esc(x.status)}</td></tr>`),'No requests yet.');}
+
+async function users(){const d=await api('users?window='+$('uwin').value+'&kind='+$('ukind').value), c=d.counts;
+ tiles('ucount',[['Active now',c.now.all,c.now.all?'ok':''],['Today',c.today.all],['7 days',c['7d'].all],['30 days',c['30d'].all],
+  ['Pro users (30 days)',c['30d'].pro],['MCP users (30 days)',c['30d'].mcp]]);
+ table('users',['Who','Plan','Connects through','MCP app','Country','Last seen','First seen','Requests'],d.rows.map(r=>
+  `<tr><td>${r.idle_s<900?'<span class="dot" title="active now"></span>':''}${esc(r.who)}</td><td>${plan(r.kind)}</td><td>${pills(r.channels)}</td>
+   <td>${pills(r.clients)}</td><td>${esc(r.country||'-')}</td><td title="${esc(r.last_seen)} UTC">${ago(r.idle_s)}</td><td>${esc(r.first_seen)}</td><td class="n">${r.requests}</td></tr>`),'Nobody in this period.');}
+
+async function mcp(){const d=await api('mcp');
+ tiles('mcount',[['MCP apps (30 days)',d.apps.length],['MCP users (30 days)',d.developers.length],
+  ['Pro MCP users',d.developers.filter(x=>x.kind=='pro').length],['MCP calls (14 days)',d.daily.reduce((a,x)=>a+x.total,0)]]);
+ table('apps',['App','Users','Pro users','Connections','Last seen (UTC)'],d.apps.map(a=>
+  `<tr><td>${esc(a.app)}</td><td class="n">${a.users}</td><td class="n">${a.pro}</td><td class="n">${a.connects}</td><td>${esc(a.last_seen)}</td></tr>`),'No MCP apps yet.');
+ bars('mcalls',d.calls_by_app); bars('mtools',d.tools); chart('mchart','mdays',d.daily);
+ table('devs',['Who','Plan','App','Country','Connections','Requests','First seen','Last seen (UTC)'],d.developers.map(r=>
+  `<tr><td>${esc(r.who)}</td><td>${plan(r.kind)}</td><td>${pills(r.apps)}</td><td>${esc(r.country||'-')}</td><td class="n">${r.connects}</td><td class="n">${r.requests}</td><td>${esc(r.first_seen)}</td><td>${esc(r.last_seen)}</td></tr>`),'No developers yet.');
+ table('events',['Time (UTC)','App','Who','Plan','Country'],d.events.map(e=>
+  `<tr><td>${esc(e.ts)}</td><td>${esc(e.client)}</td><td>${esc(e.who)}</td><td>${plan(e.kind)}</td><td>${esc(e.country||'-')}</td></tr>`),'No connections since the last restart.');}
+
+async function customers(){const d=await api('customers');
+ table('keys',['Email','Key','Source','Since','Last used (UTC)','Requests','Connects through','Status',''],d.customers.map(k=>
+  `<tr><td>${esc(k.email)}</td><td><code>${esc(k.key)}</code></td><td>${esc(k.sale)}</td><td>${esc(k.created)}</td><td>${esc(k.last_seen)}</td>
+   <td class="n">${k.requests}</td><td>${pills(k.channels)}</td><td class="${k.active?'ok':'bad'}">${k.active?'active':'revoked'}</td>
+   <td>${k.active&&k.sale!='gumroad'?`<button class="rv" data-email="${esc(k.email)}">Revoke</button>`:''}</td></tr>`),'No Pro customers yet.');}
+
+async function reports(){const d=await api('reports?status='+$('rstat').value); REP={};
+ d.reports.forEach(r=>REP[r.id]=r);
+ $('reports').innerHTML=d.reports.length?d.reports.map(r=>`<div class="rep"><div class="row" style="justify-content:space-between;margin:0">
+  <b>#${r.id} &middot; ${esc(r.trade||'trade not given')} &middot; ${esc(r.region||'region not given')}</b><span class="muted">${esc(r.created)} UTC${r.email?' &middot; '+esc(r.email):''}</span></div>
+  <p class="muted">Question</p><p>${esc(r.question)}</p><p class="muted">What was wrong</p><p>${esc(r.problem)}</p>
+  ${r.correction?`<p class="muted">Suggested correction</p><p>${esc(r.correction)}</p>`:''}
+  <div class="row"><select data-id="${r.id}" class="rs">${['new','reviewing','fixed','rejected'].map(s=>`<option ${s==r.status?'selected':''}>${s}</option>`).join('')}</select>
+  <input class="rn" data-id="${r.id}" value="${esc(r.note)}" placeholder="private note" style="flex:1;min-width:160px">
+  <button class="rsave" data-id="${r.id}">Save</button><button class="rpub" data-id="${r.id}">Publish a correction...</button>
+  <button class="rdel" data-id="${r.id}">Delete</button></div></div>`).join(''):'<p class="muted">No reports here.</p>';
+ const n=d.counts||{}; $('newrep').textContent=n.new?'('+n.new+')':'';
+ table('corr',['Date','Question','What was wrong','Fixed in',''],d.corrections.map(c=>
+  `<tr><td>${esc(c.day)}</td><td>${esc(c.question)}</td><td>${esc(c.wrong)}</td><td>${esc(c.fixed_in)}</td><td><button class="cdel" data-id="${c.id}">Remove</button></td></tr>`),'None published yet.');}
+
+async function settings(){const d=await api('settings');
+ $('sets').innerHTML=d.settings.map(s=>{const v=s.value, inp=s.type=='bool'?`<label><input type="checkbox" data-k="${s.key}" ${v?'checked':''}> ${v?'on':'off'}</label>`
+  :`<input data-k="${s.key}" value="${esc(v)}" ${s.type=='str'?'':'type="number" step="any"'} style="width:100%">`;
+  return `<div class="set"><div>${esc(s.label)}<div class="muted">${s.overridden?'Set here (Railway value: '+esc(s.railway===''?'blank':s.railway)+')':'Using the Railway value'}</div></div>
+  <div>${inp}</div><div>${s.overridden?`<button class="sreset" data-k="${s.key}">Use Railway value</button>`:''}</div></div>`;}).join('');
+ table('checks',['Item','Status','Railway variable'],d.checks.map(([n,ok,v])=>`<tr><td>${esc(n)}</td><td class="${ok?'ok':'bad'}">${ok?'set':'not set'}</td><td><code>${esc(v)}</code></td></tr>`),'');}
+
+const LOAD={overview,users,mcp,customers,reports,settings};
+async function show(t){cur=LOAD[t]?t:'overview';
+ document.querySelectorAll('nav.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.t==cur));
+ document.querySelectorAll('section.tab').forEach(s=>s.classList.toggle('on',s.id=='t-'+cur));
+ try{await LOAD[cur](); $('when').textContent='Updated '+new Date().toLocaleString();}catch(e){$('when').textContent='Could not load: '+e.message;}}
+window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
+$('uwin').onchange=users; $('ukind').onchange=users; $('rstat').onchange=reports;
+document.addEventListener('click',async e=>{const b=e.target, id=b.dataset&&b.dataset.id;
+ if(b.classList.contains('rv')) return revoke(b.dataset.email);
+ if(b.classList.contains('rsave')){await api('reports/update',{id:+id,status:document.querySelector(`.rs[data-id="${id}"]`).value,note:document.querySelector(`.rn[data-id="${id}"]`).value});return reports();}
+ if(b.classList.contains('rdel')){if(!confirm('Delete report #'+id+'?'))return; await api('reports/delete',{id:+id}); return reports();}
+ if(b.classList.contains('rpub')){const r=REP[id]; $('pid').value=id; $('pq').value=r.question.slice(0,500);
+  $('pw').value=r.correction?(r.problem+' Correct: '+r.correction).slice(0,1000):r.problem.slice(0,1000); $('pv').value=''; $('pq').focus(); $('pubform').scrollIntoView({behavior:'smooth'}); return;}
+ if(b.classList.contains('cdel')){if(!confirm('Remove this correction from the public page?'))return; await api('corrections/remove',{id:+id}); return reports();}
+ if(b.classList.contains('sreset')){await api('settings',{values:{},reset:[b.dataset.k]}); return settings();}});
+async function publish(){const d=await api('corrections/publish',{report_id:+$('pid').value||0,question:$('pq').value,wrong:$('pw').value,fixed_in:$('pv').value});
+ $('pmsg').innerHTML=d.ok?'<span class="ok">Published. The answer cache was cleared.</span>':`<span class="bad">${esc(d.error)}</span>`;
+ if(d.ok){$('pid').value='';$('pq').value='';$('pw').value='';reports();}}
+async function saveSettings(){const values={};
+ document.querySelectorAll('#sets [data-k]').forEach(i=>{if(i.tagName=='INPUT')values[i.dataset.k]=i.type=='checkbox'?(i.checked?'1':'0'):i.value;});
+ const d=await api('settings',{values}); $('smsg').innerHTML=d.ok?'<span class="ok">Saved - live now.</span>':`<span class="bad">${esc(d.error)}</span>`; if(d.ok)settings();}
+async function clearCache(){const d=await api('cache/clear',{}); $('cmsg').textContent=d.ok?`Cleared ${d.cleared} cached answers.`:'Failed';}
 async function issue(){const email=$('newemail').value.trim(); if(!email)return;
  if(!confirm('Issue a Pro key for '+email+'?'))return;
  const r=await fetch('/admin/api/keys/issue',{method:'POST',headers:H,body:JSON.stringify({email})}); const d=await r.json();
- $('issued').innerHTML=d.pro_key?`Key for ${esc(d.email)}: <code>${esc(d.pro_key)}</code> (copy it now - it is shown once)`:`<span class="bad">${esc(d.error||'Failed')}</span>`; load();}
+ $('issued').innerHTML=d.pro_key?`Key for ${esc(d.email)}: <code>${esc(d.pro_key)}</code> (copy it now - it is shown once)`:`<span class="bad">${esc(d.error||'Failed')}</span>`; customers();}
 async function revoke(email){ if(!confirm('Revoke the Pro key for '+email+'? Their Pro access stops straight away.'))return;
- await fetch('/admin/api/keys/revoke',{method:'POST',headers:H,body:JSON.stringify({email})}); load();}
+ await fetch('/admin/api/keys/revoke',{method:'POST',headers:H,body:JSON.stringify({email})}); customers();}
 async function logout(){await fetch('/admin/logout',{method:'POST',headers:H}); location.href='/admin';}
-load();
+show(location.hash.slice(1)||'overview');
 </script></body></html>"""
 
 
@@ -695,9 +857,14 @@ def _ll_admin_stats() -> dict:
                 cur.execute(f"SELECT COALESCE({col}, ''), COUNT(*) FROM legis_link_audit WHERE ts >= NOW() - INTERVAL '7 days' "
                             f"AND tool <> 'webhook_sale' GROUP BY 1 ORDER BY 2 DESC LIMIT 10")
                 out[key] = [[a, int(b)] for a, b in cur.fetchall()]
-            cur.execute("SELECT to_char(ts AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), tier, tool, trade, region, status "
-                        "FROM legis_link_audit ORDER BY ts DESC LIMIT 30")
-            out["recent"] = [dict(zip(("ts", "tier", "tool", "trade", "region", "status"), r)) for r in cur.fetchall()]
+            try:
+                _ll_db_ready()   # LL-45: channel / app / country columns
+            except Exception:
+                pass
+            cur.execute("SELECT to_char(ts AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), tier, tool, trade, region, status, "
+                        "COALESCE(channel, ''), COALESCE(client, '') FROM legis_link_audit ORDER BY ts DESC LIMIT 30")
+            out["recent"] = [dict(zip(("ts", "tier", "tool", "trade", "region", "status", "channel", "client"), r))
+                             for r in cur.fetchall()]
             cur.execute("SELECT COUNT(*) FROM legis_link_free_usage WHERE date_utc = CURRENT_DATE")
             out["today"]["free_visitors"] = int(cur.fetchone()[0])
             cur.execute("SELECT email, api_key, sale_id, active, to_char(created_at, 'YYYY-MM-DD') FROM legis_link_keys "
@@ -746,6 +913,702 @@ async def _ll_admin_api_revoke(request):
     _KEY_CACHE.clear()
     logging.warning("Admin revoked a Pro key")
     return _J({"email": email, "revoked": True})
+
+
+# LL-45: admin ecosystem. Who is using the service (web app, API or MCP, which plan, which MCP app), mistake reports
+# with published corrections, settings that change without a redeploy, CSV export and an alerts log.
+# Identities are stored as one-way hashes; raw IP addresses are never stored. Pro users show their email (which we
+# already hold for the key). Anonymous visitors are deleted 30 days after their last visit.
+_LL_CHANNEL = _cv.ContextVar("ll_channel", default="")
+_LL_MCP_CLIENT = _cv.ContextVar("ll_mcp_client", default="")
+_LL_COUNTRY = _cv.ContextVar("ll_country", default="")
+_LL_MCP_CLIENTS = {}          # identity hash -> "App 1.2" (from the MCP initialize message)
+_LL_GR_EMAIL = {}             # hash of a Gumroad licence key -> buyer email (from Gumroad's verify answer)
+_LL_LABELS = {}               # identity hash -> label (email), so the database is asked once
+_LL_SEEN_MEM = {}             # used when there is no database
+_LL_MCP_EVENTS = []           # latest MCP connections since the last restart
+_LL_ALERT_LOG = []            # latest owner alerts since the last restart
+_LL_ECO = {"ready": False, "thread": None, "clean": 0.0}
+import queue as _ll_queue
+_LL_SEEN_Q = _ll_queue.Queue(maxsize=5000)
+
+
+def _ll_h(s: str) -> str:
+    return hashlib.sha256((s or "").encode()).hexdigest()[:32]
+
+
+def _ll_ident(api_key, who="") -> str:
+    k = (api_key or "").strip()
+    return k if (k and k != "dev_local") else "anon:" + (who or _LL_CLIENT.get() or "unknown")
+
+
+def _ll_mark(request, channel: str):
+    """Remember how this request arrived: channel, country (from Cloudflare) and the calling app."""
+    try:
+        _LL_CHANNEL.set(channel)
+        c = (request.headers.get("cf-ipcountry", "") or "").strip().upper()
+        _LL_COUNTRY.set(c if re.match(r"^[A-Z]{2}$", c) and c not in ("XX", "T1") else "")
+    except Exception:
+        pass
+
+
+def _ll_ua_name(request) -> str:
+    ua = (request.headers.get("user-agent", "") or "").strip()
+    return re.split(r"[\s/;(]", ua, 1)[0][:40] if ua else ""
+
+
+def _ll_db_ready():
+    """Create the LL-45 tables once (and the extra request-log columns)."""
+    if _LL_ECO["ready"] or not DATABASE_URL:
+        return
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS legis_link_seen (id VARCHAR(32) PRIMARY KEY, kind VARCHAR(10), label TEXT DEFAULT '',"
+                    " channels TEXT DEFAULT '', clients TEXT DEFAULT '', country VARCHAR(2) DEFAULT '',"
+                    " first_seen TIMESTAMPTZ DEFAULT NOW(), last_seen TIMESTAMPTZ DEFAULT NOW(), requests INTEGER DEFAULT 0,"
+                    " connects INTEGER DEFAULT 0, last_channel TEXT DEFAULT '', last_client TEXT DEFAULT '')")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ll_seen_last ON legis_link_seen(last_seen)")
+        cur.execute("CREATE TABLE IF NOT EXISTS legis_link_settings (k VARCHAR(40) PRIMARY KEY, v TEXT, updated_at TIMESTAMPTZ DEFAULT NOW())")
+        cur.execute("CREATE TABLE IF NOT EXISTS legis_link_reports (id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT NOW(),"
+                    " updated_at TIMESTAMPTZ DEFAULT NOW(), question TEXT, trade TEXT, region TEXT, problem TEXT,"
+                    " correction TEXT, email TEXT, status VARCHAR(12) DEFAULT 'new', note TEXT DEFAULT '')")
+        cur.execute("CREATE TABLE IF NOT EXISTS legis_link_corrections (id SERIAL PRIMARY KEY, day TEXT, question TEXT,"
+                    " wrong TEXT, fixed_in TEXT, report_id INTEGER, created_at TIMESTAMPTZ DEFAULT NOW())")
+        cur.execute("CREATE TABLE IF NOT EXISTS legis_link_audit (id SERIAL PRIMARY KEY, ts TIMESTAMPTZ NOT NULL, version VARCHAR(10),"
+                    " api_key VARCHAR(20), tier VARCHAR(10), tool VARCHAR(50), trade VARCHAR(50), region VARCHAR(50),"
+                    " status VARCHAR(30), error TEXT, request_id VARCHAR(10))")
+        for col in ("channel VARCHAR(12)", "client VARCHAR(60)", "country VARCHAR(2)"):
+            cur.execute("ALTER TABLE legis_link_audit ADD COLUMN IF NOT EXISTS " + col)
+        conn.commit()
+    _LL_ECO["ready"] = True
+
+
+def _ll_seen_hit(api_key, tier, who="", is_admin=False, connect=False):
+    """Record one request (or one MCP connection) for the Users and MCP tabs. Never slows or breaks a request."""
+    try:
+        k = (api_key or "").strip()
+        idh = _ll_h(_ll_ident(api_key, who))
+        if is_admin:
+            kind = "admin"
+        elif _ll_is_test_key(k):
+            kind = "test"
+        elif tier == "pro":
+            kind = "pro"
+        else:
+            kind = "free"
+        label = {"admin": "Owner (admin key)", "test": "Eval test key"}.get(kind, "")
+        if kind == "pro":
+            label = _LL_GR_EMAIL.get(_ll_h(k), "") or _LL_LABELS.get(idh, "")
+        client = _LL_MCP_CLIENT.get() or _LL_MCP_CLIENTS.get(idh, "")
+        item = (idh, kind, label, _LL_CHANNEL.get() or "other", client, _LL_COUNTRY.get(),
+                0 if connect else 1, 1 if connect else 0, k if (kind == "pro" and not label and k.startswith("ll_")) else "")
+        m = _LL_SEEN_MEM.get(idh) or {"id": idh, "kind": kind, "label": label, "channels": [], "clients": [], "country": "",
+                                      "first_seen": _time_mod.time(), "requests": 0, "connects": 0}
+        m.update(kind=kind, last_seen=_time_mod.time(), last_channel=item[3], last_client=client)
+        m["label"] = label or m["label"]
+        m["country"] = item[5] or m["country"]
+        m["requests"] += item[6]
+        m["connects"] += item[7]
+        if item[3] not in m["channels"]:
+            m["channels"].append(item[3])
+        if client and client not in m["clients"]:
+            m["clients"] = (m["clients"] + [client])[-5:]
+        _LL_SEEN_MEM[idh] = m
+        if len(_LL_SEEN_MEM) > 5000:
+            for old in sorted(_LL_SEEN_MEM, key=lambda x: _LL_SEEN_MEM[x]["last_seen"])[:1000]:
+                _LL_SEEN_MEM.pop(old, None)
+        if DATABASE_URL:
+            _LL_SEEN_Q.put_nowait(item)
+            if _LL_ECO["thread"] is None or not _LL_ECO["thread"].is_alive():
+                import threading as _th
+                _LL_ECO["thread"] = _th.Thread(target=_ll_seen_worker, daemon=True)
+                _LL_ECO["thread"].start()
+    except Exception as e:
+        logging.warning(f"Seen: {e}")
+
+
+def _ll_seen_worker():
+    while True:
+        item = _LL_SEEN_Q.get()
+        try:
+            _ll_db_ready()
+            idh, kind, label, ch, client, country, req, con, rawkey = item
+            with get_db() as conn:
+                cur = conn.cursor()
+                if kind == "pro" and not label and idh not in _LL_LABELS and rawkey:
+                    cur.execute("SELECT email FROM legis_link_keys WHERE api_key = %s LIMIT 1", (rawkey,))
+                    r = cur.fetchone()
+                    _LL_LABELS[idh] = r[0] if r else ""
+                    label = _LL_LABELS[idh]
+                    if label and idh in _LL_SEEN_MEM:
+                        _LL_SEEN_MEM[idh]["label"] = label
+                cur.execute(
+                    "INSERT INTO legis_link_seen (id, kind, label, channels, clients, country, requests, connects, last_channel, last_client)"
+                    " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO UPDATE SET kind = EXCLUDED.kind,"
+                    " label = COALESCE(NULLIF(EXCLUDED.label, ''), legis_link_seen.label),"
+                    " channels = CASE WHEN EXCLUDED.channels = '' OR position(',' || EXCLUDED.channels || ',' in ',' || legis_link_seen.channels || ',') > 0"
+                    "   THEN legis_link_seen.channels ELSE trim(both ',' from legis_link_seen.channels || ',' || EXCLUDED.channels) END,"
+                    " clients = CASE WHEN EXCLUDED.clients = '' OR position(',' || EXCLUDED.clients || ',' in ',' || legis_link_seen.clients || ',') > 0"
+                    "   OR length(legis_link_seen.clients) > 200 THEN legis_link_seen.clients"
+                    "   ELSE trim(both ',' from legis_link_seen.clients || ',' || EXCLUDED.clients) END,"
+                    " country = COALESCE(NULLIF(EXCLUDED.country, ''), legis_link_seen.country), last_seen = NOW(),"
+                    " requests = legis_link_seen.requests + EXCLUDED.requests, connects = legis_link_seen.connects + EXCLUDED.connects,"
+                    " last_channel = EXCLUDED.last_channel,"
+                    " last_client = COALESCE(NULLIF(EXCLUDED.last_client, ''), legis_link_seen.last_client)",
+                    (idh, kind, label, ch.replace(",", " "), client.replace(",", " "), country, req, con, ch, client))
+                if _time_mod.time() - _LL_ECO["clean"] > 3600:
+                    _LL_ECO["clean"] = _time_mod.time()
+                    cur.execute("DELETE FROM legis_link_seen WHERE kind = 'free' AND last_seen < NOW() - INTERVAL '30 days'")
+                    cur.execute("DELETE FROM legis_link_reports WHERE status IN ('fixed', 'rejected')"
+                                " AND updated_at < NOW() - INTERVAL '12 months'")
+                conn.commit()
+        except Exception as e:
+            logging.warning(f"Seen store: {e}")
+
+
+def _ll_mcp_initialize(body: bytes, rq):
+    """An MCP app is connecting: note its name and version (clientInfo) against this user."""
+    try:
+        d = json.loads(body.decode("utf-8", "replace") or "null")
+    except Exception:
+        return
+    for m in (d if isinstance(d, list) else [d]):
+        if not isinstance(m, dict) or m.get("method") != "initialize":
+            continue
+        ci = (m.get("params") or {}).get("clientInfo") or {}
+        name = re.sub(r"[^\w .@+\-]", "", str(ci.get("name", "") or ""))[:40] or _ll_ua_name(rq) or "unknown app"
+        ver = re.sub(r"[^\w.\-]", "", str(ci.get("version", "") or ""))[:16]
+        client = (name + " " + ver).strip()
+        key = _LL_KEY.get()
+        idh = _ll_h(_ll_ident(key))
+        _LL_MCP_CLIENTS[idh] = client
+        if len(_LL_MCP_CLIENTS) > 5000:
+            _LL_MCP_CLIENTS.clear()
+        _LL_MCP_CLIENT.set(client)
+        try:
+            tier = validate_api_key(key).get("tier", "free") if key else "free"
+        except Exception:
+            tier = "free"
+        _ll_seen_hit(key, tier, connect=True,
+                     is_admin=bool(key and ADMIN_KEY and _hmac_mod.compare_digest(key.strip(), ADMIN_KEY)))
+        who = _LL_SEEN_MEM.get(idh, {})
+        _LL_MCP_EVENTS.append({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"), "client": client,
+                               "kind": who.get("kind", tier), "id": idh, "country": _LL_COUNTRY.get()})
+        del _LL_MCP_EVENTS[:-200]
+
+
+# ── Settings that change without a redeploy ─────────────────────────────────
+_LL_SETTINGS_SPEC = {
+    # key: (global name, type, label, minimum, maximum)
+    "free_daily": ("FREE_DAILY_LIMIT", int, "Free questions a day (per visitor)", 0, 100000),
+    "pro_daily": ("PRO_DAILY_LIMIT", int, "Pro questions a day (per key)", 1, 1000000),
+    "cap_usd": ("LL_DAILY_CAP_USD", float, "Daily AI spend ceiling for free answers ($)", 0, 1000),
+    "alert_usd": ("LL_DAILY_ALERT_USD", float, "Telegram alert when the day's spend passes ($)", 0, 1000),
+    "eval_score": ("", str, "Eval score on the landing page (e.g. 91/91)", 0, 20),
+    "eval_date": ("", str, "Eval date on the landing page (e.g. 2 Nov 2026)", 0, 30),
+    "pause_free": ("", bool, "Pause free answers (Pro keeps working)", 0, 1),
+    "banner": ("", str, "Notice shown at the top of the website and app (blank = none)", 0, 300),
+}
+_LL_SETTINGS_STATE = {"pause_free": False, "banner": "", "loaded": 0.0, "overrides": {}, "env": {}}
+
+
+def _ll_setting_value(k):
+    g = _LL_SETTINGS_SPEC[k][0]
+    if g:
+        return globals().get(g)
+    if k == "eval_score":
+        return _ll_html.unescape(_LL_EVAL["score"])
+    if k == "eval_date":
+        return _ll_html.unescape(_LL_EVAL["date"])
+    return _LL_SETTINGS_STATE[k]
+
+
+def _ll_setting_parse(k, raw):
+    g, typ, _lab, lo, hi = _LL_SETTINGS_SPEC[k]
+    s = str(raw if raw is not None else "").strip()
+    if typ is bool:
+        return s.lower() in ("1", "true", "yes", "on")
+    if typ in (int, float):
+        v = typ(float(s))
+        if not (lo <= v <= hi):
+            raise ValueError(f"must be between {lo} and {hi}")
+        return v
+    if k == "eval_score" and s and not re.match(r"^\d{1,4}/\d{1,4}$", s):
+        raise ValueError("use the form 91/91")
+    if len(s) > hi:
+        raise ValueError(f"at most {hi} characters")
+    return s
+
+
+def _ll_setting_apply(k, v):
+    g = _LL_SETTINGS_SPEC[k][0]
+    if g:
+        globals()[g] = v
+    elif k == "eval_score" and v:
+        _LL_EVAL["score"] = _ll_html.escape(v)
+        _LL_EVAL["n"] = _ll_html.escape(v.split("/")[-1])
+    elif k == "eval_date" and v:
+        _LL_EVAL["date"] = _ll_html.escape(v)
+    elif k in ("pause_free", "banner"):
+        _LL_SETTINGS_STATE[k] = v
+
+
+def _ll_settings_refresh(force=False):
+    """Read the saved settings at most once a minute. Settings not saved use the Railway variables."""
+    if not DATABASE_URL or (not force and _time_mod.time() - _LL_SETTINGS_STATE["loaded"] < 60):
+        return
+    _LL_SETTINGS_STATE["loaded"] = _time_mod.time()
+    env = _LL_SETTINGS_STATE["env"]
+    if not env:
+        for k in _LL_SETTINGS_SPEC:
+            env[k] = _ll_setting_value(k)
+    try:
+        _ll_db_ready()
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT k, v FROM legis_link_settings")
+            rows = dict(cur.fetchall())
+    except Exception as e:
+        logging.warning(f"Settings: {e}")
+        return
+    over = {}
+    for k in _LL_SETTINGS_SPEC:
+        if k in rows:
+            try:
+                over[k] = _ll_setting_parse(k, rows[k])
+            except Exception:
+                continue
+        _ll_setting_apply(k, over.get(k, env[k]))
+    _LL_SETTINGS_STATE["overrides"] = over
+
+
+def _ll_banner_html() -> str:
+    b = _LL_SETTINGS_STATE.get("banner") or ""
+    if not b:
+        return ""
+    return ('<div role="status" style="background:#FFC72C;color:#0F1B2D;padding:10px 16px;text-align:center;'
+            'font:600 14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif">' + _ll_html.escape(b) + '</div>')
+
+
+# ── Mistake reports and published corrections ───────────────────────────────
+_LL_REPORT_FORM = """
+<h2 id="report">Report a mistake</h2>
+<p>Tell us what was wrong. We check every report, fix the answer and list the fix above. Your email is optional and is
+only used to reply to you; the question may be shown on this page once the fix is published (never your email).</p>
+<form method="post" action="/report" class="box" style="display:grid;gap:10px">
+<label>The question you asked<br><textarea name="question" required maxlength="1500" rows="3" style="width:100%"></textarea></label>
+<label>Trade <input name="trade" maxlength="60" style="width:100%"></label>
+<label>Region (country, state or province) <input name="region" maxlength="60" style="width:100%"></label>
+<label>What was wrong<br><textarea name="problem" required maxlength="2000" rows="3" style="width:100%"></textarea></label>
+<label>The correct answer and source, if you know it<br><textarea name="correction" maxlength="2000" rows="3" style="width:100%"></textarea></label>
+<label>Your email (optional) <input type="email" name="email" maxlength="200" style="width:100%"></label>
+<div style="position:absolute;left:-5000px" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off"></div>
+<button type="submit" style="padding:10px 18px;border-radius:8px;border:0;background:var(--accent);color:#0F1B2D;font-weight:600;justify-self:start">Send report</button>
+</form>
+<style>textarea,input{padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}</style>
+"""
+
+
+def _ll_published_corrections() -> list:
+    if not DATABASE_URL:
+        return []
+    try:
+        _ll_db_ready()
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT day, question, wrong, fixed_in FROM legis_link_corrections ORDER BY created_at DESC LIMIT 300")
+            return [tuple(str(x or "") for x in r) for r in cur.fetchall()]
+    except Exception as e:
+        logging.warning(f"Corrections: {e}")
+        return []
+
+
+async def _ll_report_route(request):
+    from starlette.responses import HTMLResponse
+    if request.method != "POST":
+        return HTMLResponse(_ll_legal_page("Report a mistake", _LL_REPORT_FORM))
+    try:
+        form = await request.form()
+    except Exception:
+        form = {}
+    f = {k: str(form.get(k, "") or "").strip() for k in ("question", "trade", "region", "problem", "correction", "email", "website")}
+    def page(msg, code=200):
+        return HTMLResponse(_ll_legal_page("Report a mistake", f"<div class=\"box\">{msg}</div>"
+                                           "<p><a href=\"/corrections\">Back to the corrections page</a></p>"), status_code=code)
+    if f["website"]:
+        return page("Thank you - your report has been received.")       # bot filled the hidden field
+    if not f["question"] or not f["problem"]:
+        return page("Please fill in the question and what was wrong.", 400)
+    if f["email"] and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", f["email"]):
+        f["email"] = ""
+    ip = _client_ip(request) or "unknown"
+    if _usage_hit("report:" + _ll_h(ip), 5) is None:
+        return page("You have sent several reports today - thank you. Please email info@legis-link.com for more.", 429)
+    if not DATABASE_URL:
+        return page("Reports can't be saved just now. Please email info@legis-link.com.", 503)
+    try:
+        _ll_db_ready()
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO legis_link_reports (question, trade, region, problem, correction, email) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (f["question"][:1500], f["trade"][:60], f["region"][:60], f["problem"][:2000],
+                         f["correction"][:2000], f["email"][:200].lower()))
+            conn.commit()
+    except Exception as e:
+        logging.warning(f"Report store: {e}")
+        return page("Your report could not be saved just now. Please email info@legis-link.com.", 500)
+    _ll_alert("report:" + _ll_h(f["question"]), f"new mistake report ({f['trade'] or 'trade not given'}, "
+              f"{f['region'] or 'region not given'}) - open /admin, Reports tab.", every_s=60)
+    return page("Thank you - your report has been received. We check every report and list each fix on the "
+                "corrections page.")
+
+
+# ── Admin data ───────────────────────────────────────────────────────────────
+_LL_WINDOWS = {"now": "15 minutes", "today": "", "7d": "7 days", "30d": "30 days"}
+
+
+def _ll_seen_rows(window="today", kind="", limit=500) -> list:
+    rows = []
+    if DATABASE_URL:
+        try:
+            _ll_db_ready()
+            w = "last_seen >= CURRENT_DATE" if window == "today" else f"last_seen >= NOW() - INTERVAL '{_LL_WINDOWS.get(window, '7 days')}'"
+            q = ("SELECT id, kind, label, channels, clients, country, to_char(first_seen AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'),"
+                 " to_char(last_seen AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), requests, connects, last_channel, last_client,"
+                 " EXTRACT(EPOCH FROM NOW() - last_seen) FROM legis_link_seen WHERE " + w)
+            args = []
+            if kind:
+                q += " AND kind = %s"
+                args.append(kind)
+            q += " ORDER BY last_seen DESC LIMIT %s"
+            args.append(limit)
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute(q, args)
+                for r in cur.fetchall():
+                    rows.append({"id": r[0], "kind": r[1], "label": r[2], "channels": [c for c in (r[3] or "").split(",") if c],
+                                 "clients": [c for c in (r[4] or "").split(",") if c], "country": r[5] or "",
+                                 "first_seen": r[6], "last_seen": r[7], "requests": int(r[8] or 0), "connects": int(r[9] or 0),
+                                 "last_channel": r[10] or "", "last_client": r[11] or "", "idle_s": int(r[12] or 0)})
+            return rows
+        except Exception as e:
+            logging.warning(f"Seen read: {e}")
+    import datetime as _d
+    now = _time_mod.time()
+    span = {"now": 900, "7d": 7 * 86400, "30d": 30 * 86400}.get(window)
+    start = now - span if span else _d.datetime.combine(_d.date.today(), _d.time()).timestamp()
+    fmt = lambda t: _d.datetime.utcfromtimestamp(t).strftime("%Y-%m-%d %H:%M")
+    for m in sorted(_LL_SEEN_MEM.values(), key=lambda x: -x["last_seen"]):
+        if m["last_seen"] < start or (kind and m["kind"] != kind):
+            continue
+        rows.append({**m, "channels": list(m["channels"]), "clients": list(m["clients"]), "first_seen": fmt(m["first_seen"]),
+                     "idle_s": int(now - m["last_seen"]), "last_seen": fmt(m["last_seen"])})
+    return rows[:limit]
+
+
+def _ll_who(r) -> str:
+    return r.get("label") or ({"free": "Anonymous visitor #", "pro": "Pro key #"}.get(r.get("kind"), "Key #") + r["id"][:6])
+
+
+def _ll_admin_users(window="today", kind="") -> dict:
+    rows = _ll_seen_rows(window, kind)
+    for r in rows:
+        r["who"] = _ll_who(r)
+        r.pop("id", None)
+    counts = {}
+    for w in ("now", "today", "7d", "30d"):
+        rr = _ll_seen_rows(w, "", 5000)
+        counts[w] = {"all": len(rr), "pro": sum(1 for x in rr if x["kind"] == "pro"),
+                     "mcp": sum(1 for x in rr if any(c.startswith("mcp") for c in x["channels"]))}
+    return {"window": window, "rows": rows, "counts": counts}
+
+
+def _ll_admin_mcp() -> dict:
+    rows = [r for r in _ll_seen_rows("30d", "", 5000) if any(c.startswith("mcp") for c in r["channels"])]
+    apps = {}
+    for r in rows:
+        for c in (r["clients"] or ["unknown app"]):
+            name = c.rsplit(" ", 1)[0] if re.search(r" [\d.]+$", c) else c
+            a = apps.setdefault(name, {"app": name, "users": 0, "pro": 0, "connects": 0, "last_seen": ""})
+            a["users"] += 1
+            a["pro"] += r["kind"] == "pro"
+            a["connects"] += r["connects"]
+            a["last_seen"] = max(a["last_seen"], r["last_seen"])
+    out = {"apps": sorted(apps.values(), key=lambda a: -a["users"]), "calls_by_app": [], "tools": [], "daily": [],
+           "developers": [{"who": _ll_who(r), "kind": r["kind"], "apps": r["clients"], "country": r["country"],
+                           "connects": r["connects"], "requests": r["requests"], "first_seen": r["first_seen"],
+                           "last_seen": r["last_seen"]} for r in rows[:300]],
+           "events": [{"ts": e["ts"], "client": e["client"], "kind": e["kind"], "country": e["country"],
+                       "who": _ll_who({**_LL_SEEN_MEM.get(e["id"], {}), "id": e["id"], "kind": e["kind"],
+                                       "label": (_LL_SEEN_MEM.get(e["id"]) or {}).get("label") or _LL_LABELS.get(e["id"], "")})}
+                      for e in reversed(_LL_MCP_EVENTS[-50:])]}
+    if DATABASE_URL:
+        try:
+            with get_db() as conn:
+                cur = conn.cursor()
+                mcp = "channel IN ('mcp', 'mcp-sse') AND ts >= NOW() - INTERVAL '30 days'"
+                cur.execute("SELECT COALESCE(NULLIF(client, ''), 'unknown app'), COUNT(*) FROM legis_link_audit WHERE " + mcp +
+                            " GROUP BY 1 ORDER BY 2 DESC LIMIT 20")
+                out["calls_by_app"] = [[a, int(b)] for a, b in cur.fetchall()]
+                cur.execute("SELECT tool, COUNT(*) FROM legis_link_audit WHERE " + mcp + " GROUP BY 1 ORDER BY 2 DESC LIMIT 12")
+                out["tools"] = [[a, int(b)] for a, b in cur.fetchall()]
+                cur.execute("SELECT to_char(d, 'YYYY-MM-DD'), COALESCE(t.n, 0) FROM generate_series(CURRENT_DATE - 13, CURRENT_DATE,"
+                            " INTERVAL '1 day') d LEFT JOIN (SELECT (ts AT TIME ZONE 'UTC')::date dd, COUNT(*) n FROM legis_link_audit"
+                            " WHERE channel IN ('mcp', 'mcp-sse') AND ts >= NOW() - INTERVAL '15 days' GROUP BY 1) t ON t.dd = d::date ORDER BY d")
+                out["daily"] = [{"day": a, "total": int(b), "errors": 0} for a, b in cur.fetchall()]
+        except Exception as e:
+            logging.warning(f"Admin MCP: {e}")
+    return out
+
+
+def _ll_admin_customers() -> list:
+    if not DATABASE_URL:
+        return []
+    try:
+        _ll_db_ready()
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT k.email, k.api_key, k.sale_id, k.active, to_char(k.created_at, 'YYYY-MM-DD'),"
+                        " to_char(MAX(s.last_seen) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), COALESCE(SUM(s.requests), 0),"
+                        " string_agg(DISTINCT NULLIF(s.channels, ''), ',') FROM legis_link_keys k LEFT JOIN legis_link_seen s"
+                        " ON s.kind = 'pro' AND lower(s.label) = lower(k.email) GROUP BY 1, 2, 3, 4, 5, k.created_at"
+                        " ORDER BY k.created_at DESC LIMIT 500")
+            out = [{"email": e, "key": _ll_mask_key(k), "sale": s or "", "active": bool(a), "created": c or "",
+                    "last_seen": ls or "never", "requests": int(n or 0),
+                    "channels": sorted(set(x for x in (ch or "").split(",") if x))} for e, k, s, a, c, ls, n, ch in cur.fetchall()]
+            known = {o["email"].lower() for o in out}
+            cur.execute("SELECT label, to_char(MAX(last_seen) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), SUM(requests),"
+                        " string_agg(DISTINCT channels, ',') FROM legis_link_seen WHERE kind = 'pro' AND label <> '' GROUP BY 1")
+            for lab, ls, n, ch in cur.fetchall():
+                if lab.lower() not in known:
+                    out.append({"email": lab, "key": "Gumroad licence key", "sale": "gumroad", "active": True, "created": "",
+                                "last_seen": ls or "", "requests": int(n or 0),
+                                "channels": sorted(set(x for x in (ch or "").split(",") if x))})
+            return out
+    except Exception as e:
+        logging.warning(f"Admin customers: {e}")
+        return []
+
+
+def _ll_admin_reports(status="") -> dict:
+    out = {"reports": [], "corrections": [], "counts": {}}
+    if not DATABASE_URL:
+        return out
+    try:
+        _ll_db_ready()
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT status, COUNT(*) FROM legis_link_reports GROUP BY 1")
+            out["counts"] = {a: int(b) for a, b in cur.fetchall()}
+            q = ("SELECT id, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), question, trade, region, problem,"
+                 " correction, email, status, note FROM legis_link_reports")
+            args = []
+            if status:
+                q += " WHERE status = %s"
+                args.append(status)
+            cur.execute(q + " ORDER BY created_at DESC LIMIT 200", args)
+            out["reports"] = [dict(zip(("id", "created", "question", "trade", "region", "problem", "correction", "email",
+                                        "status", "note"), r)) for r in cur.fetchall()]
+            cur.execute("SELECT id, day, question, wrong, fixed_in, report_id FROM legis_link_corrections ORDER BY created_at DESC LIMIT 300")
+            out["corrections"] = [dict(zip(("id", "day", "question", "wrong", "fixed_in", "report_id"), r)) for r in cur.fetchall()]
+    except Exception as e:
+        logging.warning(f"Admin reports: {e}")
+    return out
+
+
+def _ll_admin_settings() -> dict:
+    _ll_settings_refresh(force=True)
+    env = _LL_SETTINGS_STATE["env"] or {k: _ll_setting_value(k) for k in _LL_SETTINGS_SPEC}
+    over = _LL_SETTINGS_STATE["overrides"]
+    checks = [
+        ["Database", bool(DATABASE_URL), "DATABASE_URL"],
+        ["AI provider key", bool(os.environ.get("ANTHROPIC_API_KEY")), "ANTHROPIC_API_KEY"],
+        ["Pro key signing", bool(KEY_SECRET), "LEGIS_KEY_SECRET"],
+        ["Gumroad licence keys", bool(os.environ.get("GUMROAD_PRODUCT_ID", "").strip()), "GUMROAD_PRODUCT_ID"],
+        ["Gumroad sale webhook", bool(os.environ.get("GUMROAD_WEBHOOK_SECRET")), "GUMROAD_WEBHOOK_SECRET"],
+        ["Telegram alerts", bool(TELEGRAM_TOKEN), "TELEGRAM_TOKEN"],
+        ["Eval test key", len(LL_TEST_KEY) >= 24, "LEGIS_TEST_KEY"],
+        ["MCP registry proof", bool(os.environ.get("MCP_REGISTRY_AUTH")), "MCP_REGISTRY_AUTH"],
+    ]
+    return {"settings": [{"key": k, "label": s[2], "type": s[1].__name__, "value": _ll_setting_value(k),
+                          "railway": env.get(k), "overridden": k in over} for k, s in _LL_SETTINGS_SPEC.items()],
+            "checks": checks, "database": bool(DATABASE_URL)}
+
+
+def _ll_admin_stats_full() -> dict:
+    _ll_settings_refresh()
+    d = _ll_admin_stats()
+    d["alerts"] = list(reversed(_LL_ALERT_LOG[-30:]))
+    d["service"]["paused"] = bool(_LL_SETTINGS_STATE.get("pause_free"))
+    d["service"]["banner"] = _LL_SETTINGS_STATE.get("banner") or ""
+    d["service"]["eval_score"] = _ll_html.unescape(_LL_EVAL["score"])
+    d["service"]["eval_date"] = _ll_html.unescape(_LL_EVAL["date"])
+    d["service"]["cap_usd"] = LL_DAILY_CAP_USD
+    d["service"]["free_limit"] = FREE_DAILY_LIMIT
+    d["service"]["pro_limit"] = PRO_DAILY_LIMIT
+    d["active"] = {w: len(_ll_seen_rows(w, "", 5000)) for w in ("now", "today")}
+    d["mcp_today"] = sum(1 for r in _ll_seen_rows("today", "", 5000) if any(c.startswith("mcp") for c in r["channels"]))
+    d["reports_new"] = 0
+    if DATABASE_URL:
+        try:
+            _ll_db_ready()
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM legis_link_reports WHERE status = 'new'")
+                d["reports_new"] = int(cur.fetchone()[0])
+                cur.execute("SELECT COALESCE(NULLIF(channel, ''), 'before tracking'), COUNT(*) FROM legis_link_audit"
+                            " WHERE ts >= NOW() - INTERVAL '7 days' AND tool <> 'webhook_sale' GROUP BY 1 ORDER BY 2 DESC")
+                d["by_channel"] = [[a, int(b)] for a, b in cur.fetchall()]
+        except Exception as e:
+            logging.warning(f"Admin stats: {e}")
+    d.setdefault("by_channel", [])
+    return d
+
+
+def _ll_csv(rows, header) -> str:
+    import csv as _csv, io as _io
+    buf = _io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow(header)
+    for r in rows:
+        w.writerow([("'" + str(x)) if str(x)[:1] in ("=", "+", "-", "@", "\t", "\r") else ("" if x is None else x) for x in r])
+    return buf.getvalue()
+
+
+def _ll_admin_export(what: str):
+    if what == "users":
+        rows = _ll_seen_rows("30d", "", 100000)
+        return _ll_csv([[_ll_who(r), r["kind"], " ".join(r["channels"]), " ".join(r["clients"]), r["country"], r["first_seen"],
+                         r["last_seen"], r["requests"], r["connects"]] for r in rows],
+                       ["who", "plan", "channels", "apps", "country", "first_seen_utc", "last_seen_utc", "requests", "mcp_connections"])
+    if what == "reports":
+        rr = _ll_admin_reports()["reports"]
+        return _ll_csv([[r["id"], r["created"], r["status"], r["trade"], r["region"], r["question"], r["problem"], r["correction"],
+                         r["email"], r["note"]] for r in rr],
+                       ["id", "created_utc", "status", "trade", "region", "question", "problem", "correction", "email", "note"])
+    rows = []
+    if DATABASE_URL:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT to_char(ts AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'), version, tier, tool, trade, region, status,"
+                        " channel, client, country FROM legis_link_audit WHERE ts >= NOW() - INTERVAL '30 days' ORDER BY ts DESC LIMIT 100000")
+            rows = cur.fetchall()
+    return _ll_csv(rows, ["time_utc", "version", "tier", "tool", "trade", "region", "result", "channel", "app", "country"])
+
+
+def _ll_admin_write(action: str, b: dict) -> dict:
+    """Admin changes. Each one is logged (without personal data)."""
+    if action == "settings":
+        vals = b.get("values") or {}
+        reset = [k for k in (b.get("reset") or []) if k in _LL_SETTINGS_SPEC]
+        parsed = {}
+        for k, raw in vals.items():
+            if k not in _LL_SETTINGS_SPEC:
+                continue
+            try:
+                parsed[k] = _ll_setting_parse(k, raw)
+            except ValueError as e:
+                return {"error": f"{_LL_SETTINGS_SPEC[k][2]}: {e}"}
+        if not DATABASE_URL:
+            return {"error": "Settings need the database (DATABASE_URL)."}
+        _ll_db_ready()
+        _ll_settings_refresh(force=True)
+        with get_db() as conn:
+            cur = conn.cursor()
+            for k, v in parsed.items():
+                cur.execute("INSERT INTO legis_link_settings (k, v, updated_at) VALUES (%s, %s, NOW()) ON CONFLICT (k)"
+                            " DO UPDATE SET v = EXCLUDED.v, updated_at = NOW()", (k, str(int(v) if isinstance(v, bool) else v)))
+            for k in reset:
+                cur.execute("DELETE FROM legis_link_settings WHERE k = %s", (k,))
+            conn.commit()
+        _ll_settings_refresh(force=True)
+        logging.warning(f"Admin changed settings: {sorted(parsed)} reset: {reset}")
+        return {"ok": True}
+    if action == "reports/update":
+        st = str(b.get("status", ""))
+        if st not in ("new", "reviewing", "fixed", "rejected"):
+            return {"error": "bad status"}
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE legis_link_reports SET status = %s, note = %s, updated_at = NOW() WHERE id = %s",
+                        (st, str(b.get("note", ""))[:1000], int(b.get("id", 0))))
+            conn.commit()
+        return {"ok": True}
+    if action == "reports/delete":
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM legis_link_reports WHERE id = %s", (int(b.get("id", 0)),))
+            conn.commit()
+        return {"ok": True}
+    if action == "corrections/publish":
+        q, w = str(b.get("question", "")).strip()[:500], str(b.get("wrong", "")).strip()[:1000]
+        if not q or not w:
+            return {"error": "Fill in the question and what was wrong."}
+        import datetime as _d
+        rid = int(b.get("report_id") or 0) or None
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO legis_link_corrections (day, question, wrong, fixed_in, report_id) VALUES (%s,%s,%s,%s,%s)",
+                        (f"{_d.date.today().day} {_d.date.today().strftime('%b %Y')}", q, w,
+                         str(b.get("fixed_in", "") or VERSION)[:20], rid))
+            if rid:
+                cur.execute("UPDATE legis_link_reports SET status = 'fixed', updated_at = NOW() WHERE id = %s", (rid,))
+            conn.commit()
+        _LL_ANS_CACHE.clear()      # the fixed answer must not come back from the cache
+        logging.warning("Admin published a correction")
+        return {"ok": True}
+    if action == "corrections/remove":
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM legis_link_corrections WHERE id = %s", (int(b.get("id", 0)),))
+            conn.commit()
+        return {"ok": True}
+    if action == "cache/clear":
+        n = len(_LL_ANS_CACHE)
+        _LL_ANS_CACHE.clear()
+        logging.warning("Admin cleared the answer cache")
+        return {"ok": True, "cleared": n}
+    return {"error": "unknown action"}
+
+
+async def _ll_admin_api(request):
+    """/admin/api/<name> for the LL-45 tabs. Reads and writes need the session cookie and the admin header;
+    CSV downloads (plain links) need the session cookie."""
+    from starlette.responses import JSONResponse as _J, Response as _R
+    import asyncio as _aio
+    name = request.path_params.get("name", "")
+    loop = _aio.get_running_loop()
+    if name == "export" and request.method == "GET":
+        if not _ll_admin_ok(request):
+            return _J({"error": "Unauthorized"}, status_code=401)
+        what = request.query_params.get("what", "requests")
+        what = what if what in ("requests", "users", "reports") else "requests"
+        data = await loop.run_in_executor(None, _ll_admin_export, what)
+        import datetime as _d
+        return _R(data, media_type="text/csv; charset=utf-8", headers={
+            "Content-Disposition": f'attachment; filename="legis-link-{what}-{_d.date.today().isoformat()}.csv"',
+            "Cache-Control": "no-store"})
+    if not _ll_admin_action_ok(request):
+        return _J({"error": "Unauthorized"}, status_code=401)
+    q = request.query_params
+    try:
+        if request.method == "GET":
+            fn = {"stats2": lambda: _ll_admin_stats_full(),
+                  "users": lambda: _ll_admin_users(q.get("window", "today") if q.get("window") in _LL_WINDOWS else "today",
+                                                   q.get("kind", "") if q.get("kind") in ("pro", "free", "test", "admin") else ""),
+                  "mcp": _ll_admin_mcp,
+                  "customers": lambda: {"customers": _ll_admin_customers()},
+                  "reports": lambda: _ll_admin_reports(q.get("status", "") if q.get("status") in ("new", "reviewing", "fixed", "rejected") else ""),
+                  "settings": _ll_admin_settings}.get(name)
+            if not fn:
+                return _J({"error": "Not found"}, status_code=404)
+            return _J(await loop.run_in_executor(None, fn), headers={"Cache-Control": "no-store"})
+        body = await request.json()
+        res = await loop.run_in_executor(None, _ll_admin_write, name, body if isinstance(body, dict) else {})
+        return _J(res, status_code=400 if res.get("error") else 200)
+    except Exception as e:
+        logging.warning(f"Admin API {name}: {e}")
+        return _J({"error": "Something went wrong - see the server log."}, status_code=500)
 
 
 def validate_api_key(key: str | None) -> dict:
@@ -813,6 +1676,8 @@ def check_rate_limit(api_key: str, tier: str, who: str = "") -> dict:
         _LL_NOCACHE.set(_is_admin or _ll_is_test_key(api_key))
     except Exception:
         pass
+    _ll_settings_refresh()                              # LL-45
+    _ll_seen_hit(api_key, tier, who, _is_admin)         # LL-45
     if _is_admin:
         return {"allowed": True, "remaining": 999999, "limit": 999999}
     limit = PRO_DAILY_LIMIT if tier == "pro" else FREE_DAILY_LIMIT
@@ -861,7 +1726,10 @@ def audit_log(api_key: str, tier: str, tool: str,
             "error":      error,
             "request_id": hashlib.md5(
                 f"{api_key}{tool}{datetime.now().isoformat()}".encode()
-            ).hexdigest()[:8]
+            ).hexdigest()[:8],
+            "channel":    _LL_CHANNEL.get()[:12],      # LL-45
+            "client":     _LL_MCP_CLIENT.get()[:60],
+            "country":    _LL_COUNTRY.get()[:2],
         }
         # File log (always)
         with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
@@ -897,14 +1765,19 @@ def _db_audit_log(entry: dict):
                 request_id VARCHAR(10)
             )
         """)
+        try:
+            _ll_db_ready()   # LL-45: adds the channel / client / country columns once
+        except Exception:
+            pass
         cur.execute("""
             INSERT INTO legis_link_audit
-            (ts, version, api_key, tier, tool, trade, region, status, error, request_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (ts, version, api_key, tier, tool, trade, region, status, error, request_id, channel, client, country)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             entry["ts"], entry["v"], entry["key"], entry["tier"],
             entry["tool"], entry["trade"], entry["region"],
-            entry["status"], entry["error"], entry["request_id"]
+            entry["status"], entry["error"], entry["request_id"],
+            entry.get("channel", ""), entry.get("client", ""), entry.get("country", "")
         ))
         conn.commit()
         conn.close()
@@ -4226,9 +5099,10 @@ uk(); au(); rc(); te(); us();
 
 def _ll_corrections_html() -> str:
     import html as _h
-    if _LL_CORRECTIONS:
+    items = _ll_published_corrections() + list(_LL_CORRECTIONS)   # LL-45: corrections published from /admin
+    if items:
         rows = "".join(f"<tr><td>{_h.escape(d)}</td><td>{_h.escape(q)}</td><td>{_h.escape(w)}</td><td>{_h.escape(v)}</td></tr>"
-                       for d, q, w, v in _LL_CORRECTIONS)
+                       for d, q, w, v in items)
         table = f"<table><tr><th>Date</th><th>Question</th><th>What was wrong</th><th>Fixed in</th></tr>{rows}</table>"
     else:
         table = "<div class=\"box\">No corrections reported yet.</div>"
@@ -4236,10 +5110,7 @@ def _ll_corrections_html() -> str:
 <p>Every mistake someone reports in a Legis-Link answer is checked, fixed and listed here, and the question is added
 to the set of known answers that every update is tested against.</p>
 {table}
-<h2>Report a mistake</h2>
-<p>Email <a href="mailto:info@legis-link.com">info@legis-link.com</a> with the question you asked, the trade and region,
-and what the correct answer is (with the regulation or source if you have it).</p>
-"""
+""" + _LL_REPORT_FORM
     return _ll_legal_page("Corrections", body)
 
 
@@ -4570,6 +5441,11 @@ def _ll_alert(key: str, text: str, every_s: float = 3600.0):
         return
     _LL_ALERTS[key] = now
     logging.warning("ALERT: " + text)
+    try:   # LL-45
+        _LL_ALERT_LOG.append({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"), "text": text})
+        del _LL_ALERT_LOG[:-100]
+    except Exception:
+        pass
     if TELEGRAM_TOKEN:
         try:
             _aio.get_running_loop().create_task(_ll_alert_send(text))
@@ -4770,6 +5646,9 @@ async def ask_claude(system_prompt: str, user_message: str) -> dict:
         if hit and _time_mod.time() - hit[0] < _LL_ANS_TTL:
             logging.warning("Answer served from cache (no AI cost)")
             return _copy.deepcopy(hit[1])
+    if _LL_TIER.get() != "pro" and _LL_SETTINGS_STATE.get("pause_free"):   # LL-45: paused from /admin
+        return {"status": "ERROR", "result": "Free answers are paused for a short while. Please try again later, "
+                "or use a Pro key.", "code_reference": ""}
     if _LL_TIER.get() != "pro" and _ll_spend_today() >= LL_DAILY_CAP_USD:
         _ll_alert("cap", f"daily AI ceiling of ${LL_DAILY_CAP_USD:.0f} reached - free-tier answers are paused until "
                          "tomorrow (Pro keys still work). Raise LEGIS_DAILY_CAP_USD in Railway to change it.")
@@ -5425,6 +6304,8 @@ def run_http():
         async def handle_sse(request):
             _LL_CLIENT.set(_client_ip(request))
             _LL_KEY.set(_request_key(request))
+            _ll_mark(request, "mcp-sse")   # LL-45
+            _LL_MCP_CLIENT.set(_ll_ua_name(request))
             async with sse.connect_sse(
                 request.scope, request.receive, request._send
             ) as streams:
@@ -5816,6 +6697,10 @@ def run_http():
                     "upgrade": PRO_UPGRADE
                 }, status_code=402)
 
+            # LL-45: where the request came from (the web app on this site, or the API from elsewhere)
+            _ref = request.headers.get("referer", "") or request.headers.get("origin", "")
+            _ll_mark(request, "web app" if (request.headers.get("sec-fetch-site", "") == "same-origin"
+                                            or any(p in _ref for p in (PUBLIC_URL, "/app", "/toolbox"))) else "api")
             # Rate limit
             if tier == "free" and (not api_key or api_key.strip() == "dev_local"):
                 _ip = _client_ip(request)
@@ -5991,6 +6876,24 @@ def run_http():
                 rq = _Rq(scope, receive)
                 _LL_CLIENT.set(_client_ip(rq))
                 _LL_KEY.set(_request_key(rq))
+                _ll_mark(rq, "mcp")   # LL-45
+                if scope.get("method") == "POST":
+                    msgs, body, more = [], b"", True
+                    while more:
+                        m = await receive()
+                        msgs.append(m)
+                        if m.get("type") != "http.request":
+                            break
+                        body += m.get("body", b"")
+                        more = m.get("more_body", False)
+                    _orig_receive = receive
+
+                    async def receive():
+                        return msgs.pop(0) if msgs else await _orig_receive()
+                    if b'"initialize"' in body:
+                        _ll_mcp_initialize(body, rq)
+                    else:
+                        _LL_MCP_CLIENT.set(_LL_MCP_CLIENTS.get(_ll_h(_ll_ident(_LL_KEY.get())), "") or _ll_ua_name(rq))
                 await _ll_shsm.handle_request(scope, receive, send)
 
         @_acm
@@ -6019,6 +6922,8 @@ def run_http():
             Route("/admin/api/stats",       _ll_admin_api_stats),
             Route("/admin/api/keys/issue",  _ll_admin_api_issue,  methods=["POST"]),
             Route("/admin/api/keys/revoke", _ll_admin_api_revoke, methods=["POST"]),
+            Route("/admin/api/{name:path}", _ll_admin_api,      methods=["GET", "POST"]),   # LL-45
+            Route("/report",        _ll_report_route,     methods=["GET", "POST"]),     # LL-45
             Route("/tools",         _ll_tools_route),         # LL-43
             Route("/corrections",   _ll_corrections_route),   # LL-43
             Route("/terms",         _ll_terms_route),     # LL-42
