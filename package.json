@@ -1,7 +1,7 @@
 {
   "name": "legis-link-mcp",
-  "version": "3.15.0",
-  "description": "Construction compliance MCP server for trades - AU, UK, US, Canada and EU codes, RAMS and checklists. Hosted at https://legis-link.com/mcp",
+  "version": "3.31.0",
+  "description": "Construction compliance MCP server for 10 trades - AU, UK, US, Canada and EU codes, licensing data and draft RAMS. Hosted at https://legis-link.com/mcp",
   "main": "legis_link_mcp_server.py",
   "scripts": {
     "start": "python legis_link_mcp_server.py",
