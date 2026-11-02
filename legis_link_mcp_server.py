@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.31.0"
+VERSION           = "3.32.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -348,6 +348,7 @@ def _ll_fix_pages(html: str) -> str:
     html = html.replace('textContent = "1000/day"', f'textContent = "{PRO_DAILY_LIMIT}/day"')
     html = html.replace('<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a></p>',   # LL-42
                         '<a href="https://rickyfarmer.gumroad.com/l/Legis-LinkPro">Pro</a> &bull; '
+                        '<a href="/tools">Free calculators</a> &bull; '   # LL-43
                         '<a href="/privacy">Privacy</a> &bull; <a href="/terms">Terms</a></p>')
     return html
 
@@ -3885,10 +3886,159 @@ def _ll_calc_au(q):
     return out
 
 
+# LL-43: free calculators (/tools) and a public corrections log (/corrections).
+# The calculators run in the visitor's browser from the same code-checked figures the server uses, so they cost
+# nothing in AI credit.
+_LL_CORRECTIONS = [
+    # (date, question, what was wrong, fixed in version) - add an entry for every mistake a user reports
+]
+
+
+def _ll_tools_html() -> str:
+    import json as _j
+    te = {str(k): v for k, v in _UK_TE.items()}
+    data = _j.dumps({"te": te, "cm": _US_CM, "uk": _UK_CURVE_K, "au": _AU_CURVE_K})
+    body = """
+<p>Free calculators for electricians, worked out from the published formulas and tables. No sign-in, nothing stored,
+nothing sent to an AI. Always confirm against the published standard before relying on a result.</p>
+
+<h2>Maximum Zs - UK (BS 7671:2018+A4:2026)</h2>
+<div class="box"><label>Device <select id="ukc"><option>B</option><option>C</option><option>D</option></select></label>
+<label> Rating <select id="ukr"></select> A</label>
+<label> Measured Zs <input id="ukz" type="number" step="0.01" min="0" placeholder="optional" style="width:7em"> ohm</label>
+<p id="uko"></p></div>
+
+<h2>Maximum Zs - Australia (AS/NZS 3000:2018)</h2>
+<div class="box"><label>Device <select id="auc"><option>B</option><option selected>C</option><option>D</option></select></label>
+<label> Rating <select id="aur"></select> A</label>
+<label> Measured Zs <input id="auz" type="number" step="0.01" min="0" placeholder="optional" style="width:7em"> ohm</label>
+<p id="auo"></p></div>
+
+<h2>RCD fault protection loop limit - UK</h2>
+<div class="box"><label>RCD rating <select id="rcd"><option>10</option><option selected>30</option><option>100</option><option>300</option><option>500</option></select> mA</label>
+<p id="rco"></p></div>
+
+<h2>Voltage drop - UK twin and earth</h2>
+<div class="box"><label>Cable <select id="tes"></select> mm&sup2;</label>
+<label> Design current <input id="tei" type="number" step="0.1" min="0" value="20" style="width:6em"> A</label>
+<label> Length <input id="tel" type="number" step="0.5" min="0" value="25" style="width:6em"> m</label>
+<label> Circuit <select id="tet"><option value="5">Power / other (5%)</option><option value="3">Lighting (3%)</option></select></label>
+<p id="teo"></p></div>
+
+<h2>Voltage drop - US copper (NEC)</h2>
+<div class="box"><label>Conductor <select id="usa"></select> AWG</label>
+<label> Load <input id="usi" type="number" step="0.1" min="0" value="16" style="width:6em"> A</label>
+<label> One-way length <input id="usl" type="number" step="1" min="0" value="75" style="width:6em"> ft</label>
+<label> Voltage <select id="usv"><option>120</option><option selected>240</option></select> V</label>
+<p id="uso"></p></div>
+
+<p class="muted">Want the rule behind a number, or a check of a whole installation? Ask in the
+<a href="/app">Legis-Link app</a>. Found a mistake? Tell us at <a href="mailto:info@legis-link.com">info@legis-link.com</a>
+- every correction is listed on the <a href="/corrections">corrections page</a>.</p>
+<script>
+const D = __DATA__;
+const R = [6,10,16,20,25,32,40,50,63];
+const $ = id => document.getElementById(id);
+function fill(sel, vals, def){ $(sel).innerHTML = vals.map(v => `<option ${v==def?'selected':''}>${v}</option>`).join(''); }
+fill('ukr', R, 32); fill('aur', R, 20);
+fill('tes', Object.keys(D.te).sort((a,b)=>a-b), '2.5'); fill('usa', Object.keys(D.cm), '12');
+const f2 = x => x.toFixed(2);
+function uk(){ const k=D.uk[$('ukc').value], In=+$('ukr').value, max=230*0.95/(k*In), r80=max*0.8, z=parseFloat($('ukz').value);
+  let t=`Maximum Zs (0.4 s, Table 41.3 method, Cmin 0.95): <b>${f2(max)} ohm</b>. 80% rule of thumb for readings at room temperature: <b>${f2(r80)} ohm</b>.`;
+  if(!isNaN(z)) t += z<=r80 ? ` <b>PASS</b> - ${z} ohm is within the 80% figure.` : z<=max ? ` <b>BORDERLINE</b> - below the maximum but above 80%: apply the temperature correction.` : ` <b>FAIL</b> - ${z} ohm is above the maximum.`;
+  $('uko').innerHTML = t; }
+function au(){ const k=D.au[$('auc').value], In=+$('aur').value, ia=k*In, max=230/ia, z=parseFloat($('auz').value);
+  let t=`Zs max = 230 V / (${k} x ${In} A = ${ia} A) = <b>${f2(max)} ohm</b>.`;
+  if(!isNaN(z)) t += z<=max ? ` <b>PASS</b> - ${z} ohm is within the maximum${z>0.9*max?' (close to the limit: allow for conductor temperature under fault)':''}.` : ` <b>FAIL</b> - ${z} ohm is above the maximum.`;
+  $('auo').innerHTML = t; }
+function rc(){ const ma=+$('rcd').value; $('rco').innerHTML = `Where the RCD is relied on for fault protection, maximum Zs = 50 V / ${ma/1000} A = <b>${Math.round(50/(ma/1000))} ohm</b> (Table 41.5). Values above 200 ohm may not be stable.`; }
+function te(){ const s=$('tes').value, v=D.te[s], I=+$('tei').value, L=+$('tel').value, lim=+$('tet').value;
+  const vd=v[0]*I*L/1000, pc=vd/230*100;
+  $('teo').innerHTML = `Voltage drop = ${v[0]} mV/A/m x ${I} A x ${L} m = <b>${f2(vd)} V (${f2(pc)}%)</b> of 230 V - ${pc<=lim?'<b>within</b>':'<b>over</b>'} the ${lim}% limit. Current rating: ${v[1]} A clipped direct (Method C), ${v[2]} A in an insulated ceiling (Method 100)${I>v[1]?' - <b>the design current is above even the clipped-direct rating</b>':''}.`; }
+function us(){ const cm=D.cm[$('usa').value], I=+$('usi').value, L=+$('usl').value, V=+$('usv').value;
+  const vd=2*12.9*I*L/cm, pc=vd/V*100;
+  $('uso').innerHTML = `Voltage drop = 2 x 12.9 x ${I} A x ${L} ft / ${cm} cmil = <b>${f2(vd)} V (${f2(pc)}%)</b> of ${V} V. The NEC informational notes recommend no more than 3% on a branch circuit and 5% overall.`; }
+['ukc','ukr','ukz'].forEach(i=>$(i).addEventListener('input',uk)); ['auc','aur','auz'].forEach(i=>$(i).addEventListener('input',au));
+$('rcd').addEventListener('input',rc); ['tes','tei','tel','tet'].forEach(i=>$(i).addEventListener('input',te));
+['usa','usi','usl','usv'].forEach(i=>$(i).addEventListener('input',us));
+uk(); au(); rc(); te(); us();
+</script>
+""".replace("__DATA__", data)
+    return _ll_legal_page("Free electrical calculators", body).replace(
+        "<a href=\"/privacy\">Privacy</a>", "<a href=\"/tools\">Calculators</a> &middot; <a href=\"/privacy\">Privacy</a>", 1)
+
+
+def _ll_corrections_html() -> str:
+    import html as _h
+    if _LL_CORRECTIONS:
+        rows = "".join(f"<tr><td>{_h.escape(d)}</td><td>{_h.escape(q)}</td><td>{_h.escape(w)}</td><td>{_h.escape(v)}</td></tr>"
+                       for d, q, w, v in _LL_CORRECTIONS)
+        table = f"<table><tr><th>Date</th><th>Question</th><th>What was wrong</th><th>Fixed in</th></tr>{rows}</table>"
+    else:
+        table = "<div class=\"box\">No corrections reported yet.</div>"
+    body = f"""
+<p>Every mistake someone reports in a Legis-Link answer is checked, fixed and listed here, and the question is added
+to the set of known answers that every update is tested against.</p>
+{table}
+<h2>Report a mistake</h2>
+<p>Email <a href="mailto:info@legis-link.com">info@legis-link.com</a> with the question you asked, the trade and region,
+and what the correct answer is (with the regulation or source if you have it).</p>
+"""
+    return _ll_legal_page("Corrections", body)
+
+
+async def _ll_tools_route(request):
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(_ll_tools_html())
+
+
+async def _ll_corrections_route(request):
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(_ll_corrections_html())
+
+
+# LL-43: drain gradients computed in code (UK Approved Document H; US IPC), like the electrical figures
+def _ll_calc_plumbing(q, country):
+    out = []
+    ql = q.lower()
+    if not re.search(r"gradient|fall|slope|grade", ql):
+        return out
+    if country == "UK":
+        mm = re.search(r"\b(100|110|150|160)\s?mm\b", ql)
+        if mm:
+            d = int(mm.group(1))
+            if d in (100, 110):
+                out.append("- Foul drain, 100 mm nominal (Approved Document H): minimum gradient 1:80 where at least "
+                           "one WC discharges to it; 1:40 where no WC discharges to it.")
+            else:
+                out.append("- Foul drain, 150 mm nominal (Approved Document H): minimum gradient 1:150 where at least "
+                           "five WCs discharge to it.")
+    elif country == "US":
+        m = re.search(r"\b(\d(?:-1/2|\.5)?|1-1/4|1-1/2)\s?(?:in|inch|\")", ql)
+        if m:
+            s = m.group(1).replace("-1/2", ".5").replace("1-1/4", "1.25").replace("1-1/2", "1.5")
+            try:
+                size = float(s)
+            except ValueError:
+                size = None
+            if size is not None:
+                slope = "1/4 in per ft" if size <= 2.5 else ("1/8 in per ft" if size <= 6 else "1/16 in per ft")
+                out.append(f"- Horizontal drainage pipe, {m.group(1)} in (IPC Table 704.1): minimum slope {slope}. "
+                           "Where the UPC is adopted, 1/4 in per ft is generally required.")
+    return out
+
+
 def _ll_verified_calcs(user_message: str) -> str:
     """Numbers computed by code from published tables, injected as authoritative data for the AI to use exactly."""
     try:
         m = re.match(r"\s*Trade:\s*([^|\n]+?)\s*\|\s*Region:\s*([^|\n]+)", user_message or "")
+        if m and m.group(1).strip().lower() == "plumbing":   # LL-43: drain gradients from code
+            qm = re.search(r"Question:\s*([^\n]+)", user_message or "")
+            plines = _ll_calc_plumbing(qm.group(1) if qm else "", _region_country(m.group(2)))
+            if not plines:
+                return ""
+            return ("\n\nVERIFIED DATA (from Legis-Link's reviewed tables - use these figures exactly and state them "
+                    "in the answer):\n" + "\n".join(plines))
         if not m or m.group(1).strip().lower() != "electrical":
             return ""
         country = _region_country(m.group(2))
@@ -5607,6 +5757,8 @@ def run_http():
             Route("/app",           handle_app),
             Route("/connect",       handle_connect_page),
             Route("/privacy",       _ll_privacy_route),   # LL-42
+            Route("/tools",         _ll_tools_route),         # LL-43
+            Route("/corrections",   _ll_corrections_route),   # LL-43
             Route("/terms",         _ll_terms_route),     # LL-42
             Route("/manifest.json", _ll_manifest),
             Route("/favicon.ico", _ll_icon), Route("/favicon.svg", _ll_icon), Route("/icon.svg", _ll_icon),
