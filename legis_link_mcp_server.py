@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.35.0"
+VERSION           = "3.36.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -629,6 +629,8 @@ td.n,th.n{text-align:right}
 <option value="today" selected>today</option><option value="7d">in the last 7 days</option><option value="30d">in the last 30 days</option></select></label>
 <label>Plan <select id="ukind"><option value="">all</option><option value="pro">Pro</option><option value="free">Free</option>
 <option value="test">Test key</option><option value="admin">Admin</option></select></label>
+<label>Show <select id="uwho"><option value="people" selected>people (hide automated checkers)</option>
+<option value="bots">automated checkers only</option><option value="all">everyone</option></select></label>
 <a class="btn" href="/admin/api/export?what=users">Download users (CSV)</a></div>
 <p class="muted">There is no sign-in for users: each Pro key, and each free visitor's browser or address, counts as one user (stored as a
 one-way hash). "Active now" = a request in the last 15 minutes. Anonymous visitors are deleted 30 days after their last visit.</p>
@@ -640,7 +642,7 @@ one-way hash). "Active now" = a request in the last 15 minutes. Anonymous visito
 <h2>MCP apps connecting (30 days)</h2><div class="wrap"><table id="apps"></table></div>
 <div class="two"><div><h2>MCP calls by app (30 days)</h2><div id="mcalls"></div></div><div><h2>MCP calls by tool (30 days)</h2><div id="mtools"></div></div></div>
 <h2>MCP calls, last 14 days</h2><div class="chart" id="mchart"></div><div class="days" id="mdays"></div>
-<h2>Developers using MCP (30 days)</h2><div class="wrap"><table id="devs"></table></div>
+<h2>People using MCP (30 days)</h2><div class="wrap"><table id="devs"></table></div>
 <h2>Latest MCP connections (since the last restart)</h2><div class="wrap"><table id="events"></table></div>
 <p class="muted">The app name and version come from the MCP "initialize" message the app sends (for example Claude, Cursor or VS Code).</p>
 </section>
@@ -696,7 +698,8 @@ function table(el,head,rows,empty){$(el).innerHTML='<tr>'+head.map(h=>`<th${NUM.
 
 async function overview(){const d=await api('stats2'); const s=d.service, t=d.today;
  $('newrep').textContent=d.reports_new?'('+d.reports_new+')':'';
- tiles('live',[['Active now (15 min)',d.active.now,d.active.now?'ok':''],['Users today',d.active.today],['MCP users today',d.mcp_today],
+ const pn=d.people||{now:{},today:{}};
+ tiles('live',[['People active now (15 min)',pn.now.person||0,(pn.now.person||0)?'ok':''],['People today',pn.today.person||0],['Automated checkers today',pn.today.bot||0],
   ['New mistake reports',d.reports_new,d.reports_new?'warn':''],['Free answers',s.paused?'PAUSED':'on',s.paused?'bad':'ok']]);
  tiles('svc',[['Version',s.version],['Model',s.model],['Backup model',s.fallback],['Thinking effort',s.effort],
   ['Eval score',s.eval_score+' ('+s.eval_date+')'],['Free / Pro limit',s.free_limit+' / '+s.pro_limit+' a day'],
@@ -710,21 +713,23 @@ async function overview(){const d=await api('stats2'); const s=d.service, t=d.to
  table('recent',['Time (UTC)','Tier','Channel','App','Tool','Trade','Region','Result'],d.recent.map(x=>
   `<tr><td>${esc(x.ts)}</td><td>${esc(x.tier)}</td><td>${esc(x.channel)}</td><td>${esc(x.client)}</td><td>${esc(x.tool)}</td><td>${esc(x.trade)}</td><td>${esc(x.region)}</td><td>${esc(x.status)}</td></tr>`),'No requests yet.');}
 
-async function users(){const d=await api('users?window='+$('uwin').value+'&kind='+$('ukind').value), c=d.counts;
- tiles('ucount',[['Active now',c.now.all,c.now.all?'ok':''],['Today',c.today.all],['7 days',c['7d'].all],['30 days',c['30d'].all],
-  ['Pro users (30 days)',c['30d'].pro],['MCP users (30 days)',c['30d'].mcp]]);
- table('users',['Who','Plan','Connects through','MCP app','Country','Last seen','First seen','Requests'],d.rows.map(r=>
-  `<tr><td>${r.idle_s<900?'<span class="dot" title="active now"></span>':''}${esc(r.who)}</td><td>${plan(r.kind)}</td><td>${pills(r.channels)}</td>
+const TYPE={person:'<span class="pill pro">person</span>',unclear:'<span class="pill">unclear</span>',bot:'<span class="pill" style="opacity:.6">automated</span>',own:'<span class="pill">you</span>'};
+async function users(){const d=await api('users?window='+$('uwin').value+'&kind='+$('ukind').value+'&who='+$('uwho').value), c=d.counts;
+ tiles('ucount',[['People active now',c.now.person,c.now.person?'ok':''],['People today',c.today.person],['People, 7 days',c['7d'].person],
+  ['People, 30 days',c['30d'].person],['Unclear, 30 days',c['30d'].unclear],['Automated checkers, 30 days',c['30d'].bot]]);
+ table('users',['Who','Type','Plan','Connects through','MCP app','Country','Last seen','First seen','Requests'],d.rows.map(r=>
+  `<tr><td>${r.idle_s<900?'<span class="dot" title="active now"></span>':''}${esc(r.who)}</td><td>${TYPE[r.type]||''}</td><td>${plan(r.kind)}</td><td>${pills(r.channels)}</td>
    <td>${pills(r.clients)}</td><td>${esc(r.country||'-')}</td><td title="${esc(r.last_seen)} UTC">${ago(r.idle_s)}</td><td>${esc(r.first_seen)}</td><td class="n">${r.requests}</td></tr>`),'Nobody in this period.');}
 
-async function mcp(){const d=await api('mcp');
- tiles('mcount',[['MCP apps (30 days)',d.apps.length],['MCP users (30 days)',d.developers.length],
+async function mcp(){const d=await api('mcp'), t=d.types||{};
+ tiles('mcount',[['People via MCP (30 days)',t.person||0,(t.person||0)?'ok':''],['Unclear (30 days)',t.unclear||0],['Automated checkers (30 days)',t.bot||0],
   ['Pro MCP users',d.developers.filter(x=>x.kind=='pro').length],['MCP calls (14 days)',d.daily.reduce((a,x)=>a+x.total,0)]]);
- table('apps',['App','Users','Pro users','Connections','Last seen (UTC)'],d.apps.map(a=>
-  `<tr><td>${esc(a.app)}</td><td class="n">${a.users}</td><td class="n">${a.pro}</td><td class="n">${a.connects}</td><td>${esc(a.last_seen)}</td></tr>`),'No MCP apps yet.');
+ table('apps',['App','Type','Users','Pro users','Connections','Last seen (UTC)'],d.apps.map(a=>
+  `<tr><td>${esc(a.app)}</td><td>${TYPE[a.type]||''}</td><td class="n">${a.users}</td><td class="n">${a.pro}</td><td class="n">${a.connects}</td><td>${esc(a.last_seen)}</td></tr>`),'No MCP apps yet.');
  bars('mcalls',d.calls_by_app); bars('mtools',d.tools); chart('mchart','mdays',d.daily);
- table('devs',['Who','Plan','App','Country','Connections','Requests','First seen','Last seen (UTC)'],d.developers.map(r=>
-  `<tr><td>${esc(r.who)}</td><td>${plan(r.kind)}</td><td>${pills(r.apps)}</td><td>${esc(r.country||'-')}</td><td class="n">${r.connects}</td><td class="n">${r.requests}</td><td>${esc(r.first_seen)}</td><td>${esc(r.last_seen)}</td></tr>`),'No developers yet.');
+ const devs=d.developers.filter(r=>r.type!=='bot');
+ table('devs',['Who','Type','Plan','App','Country','Connections','Requests','First seen','Last seen (UTC)'],devs.map(r=>
+  `<tr><td>${esc(r.who)}</td><td>${TYPE[r.type]||''}</td><td>${plan(r.kind)}</td><td>${pills(r.apps)}</td><td>${esc(r.country||'-')}</td><td class="n">${r.connects}</td><td class="n">${r.requests}</td><td>${esc(r.first_seen)}</td><td>${esc(r.last_seen)}</td></tr>`),'No people using MCP yet (automated checkers are hidden).');
  table('events',['Time (UTC)','App','Who','Plan','Country'],d.events.map(e=>
   `<tr><td>${esc(e.ts)}</td><td>${esc(e.client)}</td><td>${esc(e.who)}</td><td>${plan(e.kind)}</td><td>${esc(e.country||'-')}</td></tr>`),'No connections since the last restart.');}
 
@@ -761,7 +766,7 @@ async function show(t){cur=LOAD[t]?t:'overview';
  document.querySelectorAll('section.tab').forEach(s=>s.classList.toggle('on',s.id=='t-'+cur));
  try{await LOAD[cur](); $('when').textContent='Updated '+new Date().toLocaleString();}catch(e){$('when').textContent='Could not load: '+e.message;}}
 window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
-$('uwin').onchange=users; $('ukind').onchange=users; $('rstat').onchange=reports;
+$('uwin').onchange=users; $('ukind').onchange=users; $('uwho').onchange=users; $('rstat').onchange=reports;
 document.addEventListener('click',async e=>{const b=e.target, id=b.dataset&&b.dataset.id;
  if(b.classList.contains('rv')) return revoke(b.dataset.email);
  if(b.classList.contains('rsave')){await api('reports/update',{id:+id,status:document.querySelector(`.rs[data-id="${id}"]`).value,note:document.querySelector(`.rn[data-id="${id}"]`).value});return reports();}
@@ -1315,16 +1320,69 @@ def _ll_who(r) -> str:
     return r.get("label") or ({"free": "Anonymous visitor #", "pro": "Pro key #"}.get(r.get("kind"), "Key #") + r["id"][:6])
 
 
-def _ll_admin_users(window="today", kind="") -> dict:
+# LL-47: tell real people apart from automated checkers (MCP directories, registries, uptime monitors).
+# Decided from the app name an MCP client sends, and from behaviour (connected but never asked a question).
+_LL_BOT_RE = re.compile(r"probe|prober|health|check|crawl|scan|index|registry|(?:^|[^a-z])bot(?:[^a-z]|$)|bot$|verif|monitor|"
+                        r"inspect|catalog|survey|research|audit|uptime|spider|rank|test|beat|glama|smithery|inventory|"
+                        r"collector|directory|listing|discovery|scout|assay|posture|reliability|bench|sniff|lastseen|"
+                        r"wellknown|dualstack|crawler", re.I)
+_LL_PERSON_RE = re.compile(r"claude|cursor|vs ?code|visual studio|windsurf|(?:^|[^a-z])zed(?:[^a-z]|$)|cline|continue|chatgpt|"
+                           r"openai|copilot|goose|librechat|raycast|msty|5ire|cherry|lm ?studio|witsy|chatbox|kiro|warp|"
+                           r"jetbrains|(?:^|[^a-z])roo(?:[^a-z]|$)", re.I)
+
+
+def _ll_client_type(name) -> str:
+    n = str(name or "")
+    if _LL_BOT_RE.search(n):
+        return "bot"
+    if _LL_PERSON_RE.search(n):
+        return "person"
+    return "unclear"
+
+
+def _ll_user_type(r) -> str:
+    """'own' (admin / eval test key), 'person', 'bot' or 'unclear'."""
+    if r.get("kind") in ("admin", "test"):
+        return "own"
+    chans = r.get("channels") or []
+    types = {_ll_client_type(c) for c in (r.get("clients") or [])}
+    if "person" in types:
+        return "person"
+    if types and types == {"bot"}:
+        return "bot"
+    if r.get("kind") == "pro":
+        return "person"
+    if "web app" in chans:
+        return "person"
+    if any(c.startswith("mcp") for c in chans) and not r.get("requests"):
+        return "bot"            # connected, listed the tools, never asked anything
+    return "unclear"
+
+
+def _ll_type_counts(rows) -> dict:
+    out = {"person": 0, "unclear": 0, "bot": 0, "own": 0}
+    for r in rows:
+        out[_ll_user_type(r)] += 1
+    return out
+
+
+def _ll_admin_users(window="today", kind="", who="people") -> dict:
     rows = _ll_seen_rows(window, kind)
     for r in rows:
+        r["type"] = _ll_user_type(r)
         r["who"] = _ll_who(r)
         r.pop("id", None)
+    if who == "people":
+        rows = [r for r in rows if r["type"] in ("person", "unclear", "own")]
+    elif who == "bots":
+        rows = [r for r in rows if r["type"] == "bot"]
     counts = {}
     for w in ("now", "today", "7d", "30d"):
         rr = _ll_seen_rows(w, "", 5000)
+        t = _ll_type_counts(rr)
         counts[w] = {"all": len(rr), "pro": sum(1 for x in rr if x["kind"] == "pro"),
-                     "mcp": sum(1 for x in rr if any(c.startswith("mcp") for c in x["channels"]))}
+                     "mcp": sum(1 for x in rr if any(c.startswith("mcp") for c in x["channels"])),
+                     "person": t["person"], "unclear": t["unclear"], "bot": t["bot"], "own": t["own"]}
     return {"window": window, "rows": rows, "counts": counts}
 
 
@@ -1334,13 +1392,16 @@ def _ll_admin_mcp() -> dict:
     for r in rows:
         for c in (r["clients"] or ["unknown app"]):
             name = c.rsplit(" ", 1)[0] if re.search(r" [\d.]+$", c) else c
-            a = apps.setdefault(name, {"app": name, "users": 0, "pro": 0, "connects": 0, "last_seen": ""})
+            a = apps.setdefault(name, {"app": name, "users": 0, "pro": 0, "connects": 0, "last_seen": "",
+                                       "type": _ll_client_type(name)})   # LL-47
             a["users"] += 1
             a["pro"] += r["kind"] == "pro"
             a["connects"] += r["connects"]
             a["last_seen"] = max(a["last_seen"], r["last_seen"])
-    out = {"apps": sorted(apps.values(), key=lambda a: -a["users"]), "calls_by_app": [], "tools": [], "daily": [],
-           "developers": [{"who": _ll_who(r), "kind": r["kind"], "apps": r["clients"], "country": r["country"],
+    _order = {"person": 0, "unclear": 1, "bot": 2}
+    out = {"apps": sorted(apps.values(), key=lambda a: (_order.get(a["type"], 1), -a["users"])), "calls_by_app": [], "tools": [], "daily": [],
+           "types": _ll_type_counts(rows),
+           "developers": [{"who": _ll_who(r), "kind": r["kind"], "type": _ll_user_type(r), "apps": r["clients"], "country": r["country"],
                            "connects": r["connects"], "requests": r["requests"], "first_seen": r["first_seen"],
                            "last_seen": r["last_seen"]} for r in rows[:300]],
            "events": [{"ts": e["ts"], "client": e["client"], "kind": e["kind"], "country": e["country"],
@@ -1452,6 +1513,7 @@ def _ll_admin_stats_full() -> dict:
     d["service"]["free_limit"] = FREE_DAILY_LIMIT
     d["service"]["pro_limit"] = PRO_DAILY_LIMIT
     d["active"] = {w: len(_ll_seen_rows(w, "", 5000)) for w in ("now", "today")}
+    d["people"] = {w: _ll_type_counts(_ll_seen_rows(w, "", 5000)) for w in ("now", "today")}   # LL-47
     d["mcp_today"] = sum(1 for r in _ll_seen_rows("today", "", 5000) if any(c.startswith("mcp") for c in r["channels"]))
     d["reports_new"] = 0
     if DATABASE_URL:
@@ -1483,9 +1545,9 @@ def _ll_csv(rows, header) -> str:
 def _ll_admin_export(what: str):
     if what == "users":
         rows = _ll_seen_rows("30d", "", 100000)
-        return _ll_csv([[_ll_who(r), r["kind"], " ".join(r["channels"]), " ".join(r["clients"]), r["country"], r["first_seen"],
-                         r["last_seen"], r["requests"], r["connects"]] for r in rows],
-                       ["who", "plan", "channels", "apps", "country", "first_seen_utc", "last_seen_utc", "requests", "mcp_connections"])
+        return _ll_csv([[_ll_who(r), r["kind"], _ll_user_type(r), " ".join(r["channels"]), " ".join(r["clients"]), r["country"],
+                         r["first_seen"], r["last_seen"], r["requests"], r["connects"]] for r in rows],
+                       ["who", "plan", "type", "channels", "apps", "country", "first_seen_utc", "last_seen_utc", "requests", "mcp_connections"])
     if what == "reports":
         rr = _ll_admin_reports()["reports"]
         return _ll_csv([[r["id"], r["created"], r["status"], r["trade"], r["region"], r["question"], r["problem"], r["correction"],
@@ -1600,7 +1662,8 @@ async def _ll_admin_api(request):
         if request.method == "GET":
             fn = {"stats2": lambda: _ll_admin_stats_full(),
                   "users": lambda: _ll_admin_users(q.get("window", "today") if q.get("window") in _LL_WINDOWS else "today",
-                                                   q.get("kind", "") if q.get("kind") in ("pro", "free", "test", "admin") else ""),
+                                                   q.get("kind", "") if q.get("kind") in ("pro", "free", "test", "admin") else "",
+                                                   q.get("who", "people") if q.get("who") in ("people", "bots", "all") else "people"),
                   "mcp": _ll_admin_mcp,
                   "customers": lambda: {"customers": _ll_admin_customers()},
                   "reports": lambda: _ll_admin_reports(q.get("status", "") if q.get("status") in ("new", "reviewing", "fixed", "rejected") else ""),
