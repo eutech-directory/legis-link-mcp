@@ -147,7 +147,7 @@ def _notify_sale(email, api_key, product, sale_id):
         _hx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id":TELEGRAM_CHAT_ID,"text":f"NEW PRO SALE\nEmail: {email}\nKey: {api_key}\nProduct: {product}\nSale: {sale_id}"},timeout=10)
     except Exception: pass
-VERSION           = "3.36.0"
+VERSION           = "3.37.0"
 # LL-19: verified US data for IL, PA, OH, GA, NC, WA
 # LL-17: Legis-Link support email is info@legis-link.com
 # ── Page content (embedded — no filesystem dependency) ────────────────────
@@ -723,7 +723,7 @@ async function users(){const d=await api('users?window='+$('uwin').value+'&kind=
 
 async function mcp(){const d=await api('mcp'), t=d.types||{};
  tiles('mcount',[['People via MCP (30 days)',t.person||0,(t.person||0)?'ok':''],['Unclear (30 days)',t.unclear||0],['Automated checkers (30 days)',t.bot||0],
-  ['Pro MCP users',d.developers.filter(x=>x.kind=='pro').length],['MCP calls (14 days)',d.daily.reduce((a,x)=>a+x.total,0)]]);
+  ['Pro MCP users',d.developers.filter(x=>x.kind=='pro'&&x.type!=='own').length],['MCP calls (14 days)',d.daily.reduce((a,x)=>a+x.total,0)]]);
  table('apps',['App','Type','Users','Pro users','Connections','Last seen (UTC)'],d.apps.map(a=>
   `<tr><td>${esc(a.app)}</td><td>${TYPE[a.type]||''}</td><td class="n">${a.users}</td><td class="n">${a.pro}</td><td class="n">${a.connects}</td><td>${esc(a.last_seen)}</td></tr>`),'No MCP apps yet.');
  bars('mcalls',d.calls_by_app); bars('mtools',d.tools); chart('mchart','mdays',d.daily);
@@ -1340,9 +1340,29 @@ def _ll_client_type(name) -> str:
     return "unclear"
 
 
+# LL-48: honest numbers (own keys excluded) and honest answers (say when no checked data exists)
+_LL48_OWN = {e.strip().lower() for e in os.environ.get("LEGIS_OWN_EMAILS", "").split(",") if e.strip()}
+_LL48_NOTE = ("Checked data: Legis-Link has no checked licensing data for {trade} in {region}. "
+              "Treat this answer as general guidance only and check it against the current published "
+              "standard and the local regulator before you rely on it.")
+
+
+def _ll48_is_own(label) -> bool:
+    return bool(_LL48_OWN) and str(label or "").strip().lower() in _LL48_OWN
+
+
+def _ll48_note(trade, region, ground) -> str:
+    if ground:
+        return ""
+    return _LL48_NOTE.format(trade=(str(trade or "").strip() or "this trade"),
+                             region=(str(region or "").strip() or "this region"))
+
+
 def _ll_user_type(r) -> str:
     """'own' (admin / eval test key), 'person', 'bot' or 'unclear'."""
     if r.get("kind") in ("admin", "test"):
+        return "own"
+    if r.get("kind") == "pro" and _ll48_is_own(r.get("label")):   # LL-48
         return "own"
     chans = r.get("channels") or []
     types = {_ll_client_type(c) for c in (r.get("clients") or [])}
@@ -1380,7 +1400,7 @@ def _ll_admin_users(window="today", kind="", who="people") -> dict:
     for w in ("now", "today", "7d", "30d"):
         rr = _ll_seen_rows(w, "", 5000)
         t = _ll_type_counts(rr)
-        counts[w] = {"all": len(rr), "pro": sum(1 for x in rr if x["kind"] == "pro"),
+        counts[w] = {"all": len(rr), "pro": sum(1 for x in rr if x["kind"] == "pro" and _ll_user_type(x) != "own"),   # LL-48
                      "mcp": sum(1 for x in rr if any(c.startswith("mcp") for c in x["channels"])),
                      "person": t["person"], "unclear": t["unclear"], "bot": t["bot"], "own": t["own"]}
     return {"window": window, "rows": rows, "counts": counts}
@@ -1395,7 +1415,7 @@ def _ll_admin_mcp() -> dict:
             a = apps.setdefault(name, {"app": name, "users": 0, "pro": 0, "connects": 0, "last_seen": "",
                                        "type": _ll_client_type(name)})   # LL-47
             a["users"] += 1
-            a["pro"] += r["kind"] == "pro"
+            a["pro"] += r["kind"] == "pro" and _ll_user_type(r) != "own"   # LL-48
             a["connects"] += r["connects"]
             a["last_seen"] = max(a["last_seen"], r["last_seen"])
     _order = {"person": 0, "unclear": 1, "bot": 2}
@@ -6158,11 +6178,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
     if name == "check_compliance":
         question = arguments.get("question", "")
         user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
-        user_msg += _registry_ground_multi(trade, region, question)
+        _ll48_g  = _registry_ground_multi(trade, region, question)
+        user_msg += _ll48_g
         result   = await ask_claude(SYSTEM_PROMPTS["compliance"], user_msg)
         audit_log(api_key, tier, name, trade, region, result.get("status","OK"))
-        return [types.TextContent(type="text", text=format_response(
-            result, f"{trade} Compliance — {region}", PRO_UPGRADE.split('?')[0]))]
+        _ll48_txt = format_response(result, f"{trade} Compliance — {region}", PRO_UPGRADE.split('?')[0])
+        _ll48_n = _ll48_note(trade, region, _ll48_g)   # LL-48
+        if _ll48_n:
+            _ll48_txt += "\n\n*" + _ll48_n + "*"
+        return [types.TextContent(type="text", text=_ll48_txt)]
 
     if name == "get_code_reference":
         topic    = arguments.get("topic", "")
@@ -6862,8 +6886,11 @@ def run_http():
             else:
                 user_msg = f"Trade: {trade} | Region: {region} | Role: {role}\nQuestion: {question}"
             # Ground compliance answers with verified registry data (mirrors MCP path)
+            _ll48_n = ""
             if tool == "check_compliance":
-                user_msg += _registry_ground_multi(trade, region, question)
+                _ll48_g = _registry_ground_multi(trade, region, question)
+                user_msg += _ll48_g
+                _ll48_n = _ll48_note(trade, region, _ll48_g)   # LL-48
             result   = await ask_claude(SYSTEM_PROMPTS[prompt_key], user_msg)
             audit_log(api_key, tier, tool, trade, region, result.get("status","OK"))
 
@@ -6948,7 +6975,7 @@ def run_http():
                 increment_free_tier(_fp2, _ip2)
             return JSONResponse({
                 "status":         result.get("status", "INFO"),
-                "result":         result_text,
+                "result":         result_text + (("<br><br><em>" + _ll_html.escape(_ll48_n) + "</em>") if _ll48_n else ""),
                 "code_reference": result.get("code_reference", ""),
                 "trade":          trade,
                 "region":         region,
